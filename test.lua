@@ -109,5 +109,51 @@ mhtest(
 	end,
 	0.7*0.2 + 0.3*0.8)
 
+mhtest(
+	"conditioned multinomial",
+	function()
+		local hyp = multinomialDraw({"b", "c", "d"}, {0.1, 0.6, 0.3})
+		local function observe(x)
+			if int2bool(flip(0.8)) then
+				return x
+			else
+				return "b"
+			end
+		end
+		condition(observe(hyp) == "b")
+		return bool2int(hyp == "b")
+	end,
+	0.357)
+
+mhtest(
+	"recursive stochastic fn, unconditioned (tail recursive)",
+	function()
+		local function powerLaw(prob, x)
+			if int2bool(flip(prob, true)) then
+				return x
+			else
+				return powerLaw(prob, x+1)
+			end
+		end
+		local a = powerLaw(0.3, 1)
+		return bool2int(a < 5)
+	end, 
+	0.7599)
+
+mhtest(
+	"recursive stochastic fn, unconditioned",
+	function()
+		local function powerLaw(prob, x)
+			if int2bool(flip(prob, true)) then
+				return x
+			else
+				return 0 + powerLaw(prob, x+1)
+			end
+		end
+		local a = powerLaw(0.3, 1)
+		return bool2int(a < 5)
+	end, 
+	0.7599)
+
 
 print("tests done!")

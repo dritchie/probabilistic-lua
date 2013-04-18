@@ -11,6 +11,9 @@ condition = trace.condition
 
 -- Forward ERP exports
 flip = erp.flip
+multinomial = erp.multinomial
+multinomialDraw = erp.multinomialDraw
+uniformDraw = erp.uniformDraw
 
 -- Forward inference exports
 mean = inference.mean

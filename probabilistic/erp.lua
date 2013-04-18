@@ -1,4 +1,5 @@
 local trace = require "probabilistic.trace"
+local control = require "probabilistic.control"
 
 module(..., package.seeall)
 
@@ -64,6 +65,72 @@ local flipInst = FlipRandomPrimitive:new()
 function flip(p, isStructural, conditionedValue)
 	p = (p == nil) and 0.5 or p
 	return flipInst:sample({p}, isStructural, conditionedValue)
+end
+
+-------------------
+
+local MultinomialRandomPrimitive = RandomPrimitive:new()
+
+function multinomial_sample(theta)
+	local result = 1
+	local x = math.random() * util.sum(theta)
+	local probAccum = 0.00000001
+	local k = table.getn(theta)
+	while result < k and x > probAccum do
+		probAccum = probAccum + theta[result]
+		result = result + 1
+	end
+	return result - 1
+end
+
+function multinomial_logprob(n, theta)
+	if n < 1 or n > table.getn(theta) then
+		return -math.huge
+	else
+		n = math.ceil(n)
+		return math.log(theta[n]/util.sum(theta))
+	end
+end
+
+function MultinomialRandomPrimitive:sample_impl(params)
+	return multinomial_sample(params)
+end
+
+function MultinomialRandomPrimitive:logprob(val, params)
+	return multinomial_logprob(val, params)
+end
+
+-- Multinomial with currval projected out
+function MultinomialRandomPrimitive:proposal(currval, params)
+	local newparams = util.copytable(params)
+	newparams[currval] = 0
+	return multinomial_sample(newparams)
+end
+
+-- Multinomial with currval projected out
+function MultinomialRandomPrimitive:logProposalProb(currval, propval, params)
+	local newparams = util.copytable(params)
+	newparams[currval] = 0
+	return multinomial_logprob(propval, newparams)
+end
+
+local multinomialInst = MultinomialRandomPrimitive:new()
+function multinomial(theta, isStructural, conditionedValue)
+	return multinomialInst:sample(theta, isStructural, conditionedValue)
+end
+
+function multinomialDraw(items, probs, isStructural)
+	return items[multinomial(probs, isStructural)]
+end
+
+function uniformDraw(items, isStructural)
+	local n = table.getn(items)
+	local invn = 1/n
+	local probs = {}
+	for i=1,n do
+		table.insert(probs, invn)
+	end
+	return items[multinomial(probs, isStructural)]
 end
 
 -------------------

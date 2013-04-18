@@ -171,32 +171,30 @@ function RandomExecutionTrace:currentName(numFrameSkip)
 	
 	-- Get list of frames from the root frame to the current frame
 	local i = 2 + numFrameSkip
-	local f = debug.getinfo(i, 'p')
 	local flst = {}
-	table.insert(flst, f)
-	while f and (not self.rootframe or f.frameid ~= self.rootframe) do
+	repeat
+		local f = debug.getinfo(i, 'p')
+		table.insert(flst, f)
 		i = i + 1
-		f = debug.getinfo(i, 'p')
-		table.insert(flst, 0, f)
-	end
+	until not f or (self.rootframe and f.frameid == self.rootframe)
 
 	-- Build up name string, checking loop counters along the way
 	local name = ""
 	for i=1,table.getn(flst)-1 do
 		f = flst[i]
-		name = string.format("%s%u:%u", name, f.fnprotoid, f.bytecodepos)
+		name = string.format("%s%d:%d", name, f.fnprotoid, f.bytecodepos)
 		local loopnum = self.loopcounters[name] or 0
-		name = string.format("%s:%u|", name, loopnum)
+		name = string.format("%s:%d|", name, loopnum)
 	end
 	-- For the last (topmost frame), also increment the loop counter
 	f = flst[table.getn(flst)]
-	name = string.format("%s%u:%u", name, f.fnprotoid, f.bytecodepos)
+	name = string.format("%s%d:%d", name, f.fnprotoid, f.bytecodepos)
 	local loopnum = self.loopcounters[name] or 0
 	self.loopcounters[name] = loopnum + 1
-	name = string.format("%s:%u|", name, loopnum)
+	name = string.format("%s:%d|", name, loopnum)
 
+	--print(name)
 	return name
-
 end
 
 -- Looks up the value of a random variable.

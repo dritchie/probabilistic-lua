@@ -43,12 +43,47 @@ jit.off()
 
 ---------------
 
-local i = 0
+-- local i = 0
 
-function foo()
-	i = i + 1
+-- function foo()
+-- 	i = i + 1
+-- end
+
+-- print(i)
+-- foo()
+-- print(i)
+
+-----------------
+
+-- bar = function ()
+-- 	local function foo(x)
+-- 		print(debug.getinfo(1, 'p').frameid)
+-- 		if x > 0 then
+-- 			foo(x-1)
+-- 		end
+-- 	end
+-- 	foo(4)
+-- end
+-- bar()
+
+----------------
+
+function bar(x)
+	print(debug.getinfo(1, 'p').frameid)
+	if x == 0 then
+		return x
+	else
+		return foo(x-1)
+	end
 end
 
-print(i)
-foo()
-print(i)
+function foo(x)
+	print(debug.getinfo(1, 'p').frameid)
+	if x == 0 then
+		return x
+	else
+		return bar(x-1)
+	end
+end
+
+foo(5)

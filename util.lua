@@ -57,6 +57,14 @@ function cleartable(tab)
 	for k,v in pairs(tab) do tab[k]=nil end
 end
 
+function copytable(tab)
+	newtbl = {}
+	for k,v in pairs(tab) do
+		newtbl[k] = v
+	end
+	return newtbl
+end
+
 function randomChoice(tbl)
 	local n = table.getn(tbl)
 	if n > 0 then
