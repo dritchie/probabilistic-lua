@@ -42,13 +42,13 @@ end
 local FlipRandomPrimitive = RandomPrimitive:new()
 
 function FlipRandomPrimitive:sample_impl(params)
-	local p = params[0]
+	local p = params[1]
 	local randval = math.random()
 	return (randval < p) and 1 or 0
 end
 
 function FlipRandomPrimitive:logprob(val, params)
-	local p = params[0]
+	local p = params[1]
 	local prob = (val ~= 0) and p or 1.0-p
 	return math.log(prob)
 end

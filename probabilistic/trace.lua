@@ -1,4 +1,4 @@
-local util = require "probabilistic.util"
+local util = require "util"
 
 module(..., package.seeall)
 
@@ -125,7 +125,12 @@ function RandomExecutionTrace:traceUpdate()
 	self.rootframe = debug.getinfo(1, 'p').frameid
 
 	-- Run the computation, which will create/lookup random variables
+	-- NOTE: Turning the JIT off like this is definitely safe (interpreter
+	--	stack will be preserved where we need it), but it may be overly
+	--  conservative (we may be able to turn the JIT back on at some parts...) 
+	jit.off()
 	self.returnValue = self.computation()
+	jit.on()
 
 	-- Clean up
 	self.rootframe = nil
