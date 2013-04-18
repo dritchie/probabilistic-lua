@@ -7,7 +7,7 @@ module(..., package.seeall)
 local RandomVariableRecord = {}
 
 function RandomVariableRecord:new(erp, params, val, logprob, structural, conditioned)
-	conditioned = conditioned or false
+	conditioned = (conditioned == nil) and false or conditioned
 	local newobj = { erp = erp, params = params, val = val, logprob = logprob,
 			   structural = structural, conditioned = conditioned }
 	setmetatable(newobj, self)
@@ -25,7 +25,7 @@ end
 local RandomExecutionTrace = {}
 
 function RandomExecutionTrace:new(computation, doRejectionInit)
-	doRejectionInit = doRejectionInit or true
+	doRejectionInit = (doRejectionInit == nil) and true or doRejectionInit
 	local newobj = {
 		computation = computation,
 		vars = {},
@@ -66,8 +66,8 @@ function RandomExecutionTrace:deepcopy()
 end
 
 function RandomExecutionTrace:freeVarNames(structural, nonstructural)
-	structural = structural or true
-	nonstructural = nonstructural or true
+	structural = (structural == nil) and true or structural
+	nonstructural = (nonstructural == nil) and true or structural
 	return util.keys(
 		util.filter(
 			function(rec)
@@ -202,7 +202,6 @@ end
 -- Looks up the value of a random variable.
 -- Create sthe variable if it does not already exist
 function RandomExecutionTrace:lookup(name, erp, params, isStructural, conditionedValue)
-	conditionedValue = conditionedValue or nil
 	local record  = self.vars[name]
 	if not record or
 	   record.erp ~= erp or
@@ -246,7 +245,6 @@ end
 -- Exported functions for interacting with the singleton trace
 
 function lookupVariableValue(erp, params, isStructural, numFrameSkip, conditionedValue)
-	conditionedValue = conditionedValue or nil
 	if not trace then
 		return conditionedValue or erp:sample_impl(params)
 	else

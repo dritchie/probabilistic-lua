@@ -66,6 +66,14 @@ function randomChoice(tbl)
 	end
 end
 
+function bool2int(b)
+	return b and 1 or 0
+end
+
+function int2bool(i)
+	return i ~= 0
+end
+
 function openpackage(ns)
 	for n,v in pairs(ns) do
 		_G[n] = v

@@ -62,7 +62,7 @@ end
 
 local flipInst = FlipRandomPrimitive:new()
 function flip(p, isStructural, conditionedValue)
-	p = p or 0.5
+	p = (p == nil) and 0.5 or p
 	return flipInst:sample({p}, isStructural, conditionedValue)
 end
 

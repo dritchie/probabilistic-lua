@@ -63,8 +63,8 @@ end
 local RandomWalkKernel = {}
 
 function RandomWalkKernel:new(structural, nonstructural)
-	structural = structural or true
-	nonstructural = nonstructural or true
+	structural = (structural == nil) and true or structural
+	nonstructural = (nonstructural == nil) and true or structural
 	local newobj = {
 		structural = structural,
 		nonstructural = nonstructural,
@@ -110,7 +110,7 @@ end
 
 -- Do MCMC for 'numsamps' iterations using a given transition kernel
 function mcmc(computation, kernel, numsamps, lag, verbose)
-	lag = lag or 1
+	lag = (lag == nil) and 1 or lag
 	local currentTrace = trace.newTrace(computation)
 	local samps = {}
 	local iters = numsamps * lag
@@ -131,6 +131,6 @@ end
 -- number of iterations using single-variable-proposal
 -- Metropolis-Hastings 
 function traceMH(computation, numsamps, lag, verbose)
-	lag = lag or 1
+	lag = (lag == nil) and 1 or lag
 	return mcmc(computation, RandomWalkKernel:new(), numsamps, lag, verbose)
 end

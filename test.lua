@@ -43,7 +43,8 @@ mhtest(
 	"setting a flip",
 	function()
 		local a = 1 / 1000
-		condition(flip(a))
+		condition(int2bool(flip(a)))
+		--condition(flip(a))
 		return a
 	end,
 	1/1000,
@@ -53,5 +54,60 @@ mhtest(
 	"unconditioned flip",
 	function() return flip(0.7) end,
 	0.7)
+
+mhtest(
+	"and conditioned on or",
+	function()
+		local a = int2bool(flip())
+		local b = int2bool(flip())
+		condition(a or b)
+		return bool2int(a and b)
+	end,
+	1/3)
+
+mhtest(
+	"and conditioned on or, biased flip",
+	function()
+		local a = int2bool(flip(0.3))
+		local b = int2bool(flip(0.3))
+		condition(a or b)
+		return bool2int(a and b)
+	end,
+	(0.3*0.3) / (0.3*0.3 + 0.7*0.3 + 0.3*0.7))
+
+mhtest(
+	"contitioned flip",
+	function()
+		local bitflip = function(fidelity, x) return flip(int2bool(x) and fidelity or 1-fidelity) end
+		local hyp = flip(0.7)
+		condition(int2bool(bitflip(0.8, hyp)))
+		return hyp
+	end,
+	(0.7*0.8) / (0.7*0.8 + 0.3*0.2))
+
+mhtest(
+	"random 'if' with random branches, unconditioned",
+	function()
+		if int2bool(flip(0.7)) then
+			return flip(0.2)
+		else
+			return flip(0.8)
+		end
+	end,
+	0.7*0.2 + 0.3*0.8)
+
+mhtest(
+	"flip with random weight, unconditioned",
+	function() return flip(int2bool(flip(0.7)) and 0.2 or 0.8) end,
+	0.7*0.2 + 0.3*0.8)
+
+mhtest(
+	"random procedure application, unconditioned",
+	function()
+		local proc = int2bool(flip(0.7)) and (function(x) return flip(0.2) end) or (function(x) return flip(0.8) end)
+		return proc(1)
+	end,
+	0.7*0.2 + 0.3*0.8)
+
 
 print("tests done!")
