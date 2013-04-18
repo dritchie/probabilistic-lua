@@ -184,16 +184,16 @@ function RandomExecutionTrace:currentName(numFrameSkip)
 	local name = ""
 	for i=1,table.getn(flst)-1 do
 		f = flst[i]
-		name = name .. f.fnprotoid .. ":" .. f.bytecodepos
+		name = string.format("%s%u:%u", name, f.fnprotoid, f.bytecodepos)
 		local loopnum = self.loopcounters[name] or 0
-		name = name .. ":" .. loopnum .. "|"
+		name = string.format("%s:%u|", name, loopnum)
 	end
 	-- For the last (topmost frame), also increment the loop counter
 	f = flst[table.getn(flst)]
-	name = name .. f.fnprotoid .. ":" .. f.bytecodepos
+	name = string.format("%s%u:%u", name, f.fnprotoid, f.bytecodepos)
 	local loopnum = self.loopcounters[name] or 0
 	self.loopcounters[name] = loopnum + 1
-	name = name .. ":" .. loopnum .. "|"
+	name = string.format("%s:%u|", name, loopnum)
 
 	return name
 
