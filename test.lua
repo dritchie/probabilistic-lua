@@ -20,6 +20,11 @@ function test(name, estimates, trueExpectation, tolerance)
 	end
 end
 
+function mhtest(name, computation, trueExpectation, tolerance)
+	tolerance = tolerance or errorTolerance
+	test(name, replicate(runs, function() return expectation(computation, traceMH, samples, lag) end), trueExpectation, tolerance)
+end
+
 -------------------------
 
 print("starting tests...")
@@ -33,5 +38,20 @@ test("random, no query",
 	 		function() return flip(0.7) end))
 	 	end),
 	 0.7)
+
+mhtest(
+	"setting a flip",
+	function()
+		local a = 1 / 1000
+		condition(flip(a))
+		return a
+	end,
+	1/1000,
+	0.000000000000001)
+
+mhtest(
+	"unconditioned flip",
+	function() return flip(0.7) end,
+	0.7)
 
 print("tests done!")

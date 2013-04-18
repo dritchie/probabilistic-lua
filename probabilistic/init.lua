@@ -14,6 +14,11 @@ flip = erp.flip
 
 -- Forward inference exports
 mean = inference.mean
+distrib = inference.distrib
+expectation = inference.expectation
+MAP = inference.MAP
+rejectionSample = inference.rejectionSample
+traceMH = inference.traceMH
 
 -- Forward control exports
 ntimes = control.ntimes

@@ -29,12 +29,12 @@ end
 
 function RandomPrimitive:proposal(currval, params)
 	-- Subclasses can override to do more efficient proposals
-	return self.sample_impl(params)
+	return self:sample_impl(params)
 end
 
 function RandomPrimitive:logProposalProb(currval, propval, params)
 	-- Subclasses can override to do more efficient proposals
-	return self.logprob(propval, params)
+	return self:logprob(propval, params)
 end
 
 -------------------
@@ -42,9 +42,8 @@ end
 local FlipRandomPrimitive = RandomPrimitive:new()
 
 function FlipRandomPrimitive:sample_impl(params)
-	local p = params[1]
 	local randval = math.random()
-	return (randval < p) and 1 or 0
+	return (randval < params[1]) and 1 or 0
 end
 
 function FlipRandomPrimitive:logprob(val, params)
@@ -54,7 +53,7 @@ function FlipRandomPrimitive:logprob(val, params)
 end
 
 function FlipRandomPrimitive:proposal(currval, params)
-	return (not currval ~= 0) and 1 or 0
+	return (currval == 0) and 1 or 0
 end
 
 function FlipRandomPrimitive:logProposalProb(currval, propval, params)

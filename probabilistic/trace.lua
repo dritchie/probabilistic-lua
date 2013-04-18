@@ -8,7 +8,7 @@ local RandomVariableRecord = {}
 
 function RandomVariableRecord:new(erp, params, val, logprob, structural, conditioned)
 	conditioned = conditioned or false
-	local newobj = { erp = erp, params = params, val = val, logprob = logrob,
+	local newobj = { erp = erp, params = params, val = val, logprob = logprob,
 			   structural = structural, conditioned = conditioned }
 	setmetatable(newobj, self)
 	self.__index = self
@@ -59,7 +59,7 @@ function RandomExecutionTrace:deepcopy()
 
 	newdb.vars = {}
 	for k,v in pairs(self.vars) do
-		newdb.vars[k] = v.copy()
+		newdb.vars[k] = v:copy()
 	end
 
 	return newdb
@@ -98,7 +98,7 @@ function RandomExecutionTrace:lpDiff(other)
 			function(name)
 				return self.vars[name].logprob
 			end,
-			self.varDiff(other)))
+			self:varDiff(other)))
 end
 
 -- The singleton trace object
@@ -136,7 +136,7 @@ function RandomExecutionTrace:traceUpdate()
 	self.rootframe = nil
 	util.cleartable(self.loopcounters)
 
-	-- Clear out any random values that are no longer reachabel
+	-- Clear out any random values that are no longer reachable
 	self.oldlogprob = 0.0
 	for name,rec in pairs(self.vars) do
 		if not rec.active then
@@ -174,7 +174,7 @@ function RandomExecutionTrace:currentName(numFrameSkip)
 	local f = debug.getinfo(i, 'p')
 	local flst = {}
 	table.insert(flst, f)
-	while f and (not self.rootframe or f.frameid ~= self.rootframe.frameid) do
+	while f and (not self.rootframe or f.frameid ~= self.rootframe) do
 		i = i + 1
 		f = debug.getinfo(i, 'p')
 		table.insert(flst, 0, f)
@@ -218,10 +218,10 @@ function RandomExecutionTrace:lookup(name, erp, params, isStructural, conditione
 		-- Reuse existing variable
 		if not util.arrayequals(record.params, params) then
 			record.params = params
-			record.logprob = erp:logrob(record.val, params)
+			record.logprob = erp:logprob(record.val, params)
 		end
 	end
-	self.logrob = self.logprob + record.logprob
+	self.logprob = self.logprob + record.logprob
 	record.active = true
 	return record.val
 end

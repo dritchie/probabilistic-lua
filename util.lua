@@ -57,6 +57,15 @@ function cleartable(tab)
 	for k,v in pairs(tab) do tab[k]=nil end
 end
 
+function randomChoice(tbl)
+	local n = table.getn(tbl)
+	if n > 0 then
+		return tbl[math.random(n)]
+	else
+		return nil
+	end
+end
+
 function openpackage(ns)
 	for n,v in pairs(ns) do
 		_G[n] = v
