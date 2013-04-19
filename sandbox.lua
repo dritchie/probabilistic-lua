@@ -102,19 +102,46 @@ jit.off()
 
 --------------------
 
-memoize = require "probabilistic.memoize"
-erp = require "probabilistic.erp"
+-- memoize = require "probabilistic.memoize"
+-- erp = require "probabilistic.erp"
 
-function flip(x)
-   return erp.flip(x)
+-- function flip(x)
+--    return erp.flip(x)
+-- end
+
+-- memflip = memoize.mem(flip)
+
+-- for i=1,100 do
+--    --print(memflip(0.5))
+--    print(flip(0.5))
+-- end
+
+-------------------
+
+-- function foo()
+--    local x, y, z
+--    x  = 0
+--    print(x)
+--    print(y)
+--    y = 4
+-- end
+-- foo()
+
+-- print(y)
+
+-------------------
+
+-- function foo(x, y, z)
+--    print(x + y + z)
+-- end
+
+-- tbl = {1, 2, 3}
+-- foo(unpack(tbl))
+
+-------------------
+
+local thing = 2
+local function foo()
+   print(thing)
 end
-
-memflip = memoize.mem(flip)
-
-for i=1,100 do
-   --print(memflip(0.5))
-   print(flip(0.5))
-end
-
-
-
+foo()

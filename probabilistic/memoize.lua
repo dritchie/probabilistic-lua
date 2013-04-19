@@ -17,7 +17,7 @@ end
 
 function MemoizedFunction:__call(...)
 	local key = (select("#", ...) > 1) and dump.DataDumper({...}, nil, true) or
-										   dump.DataDumper(select(1, ...))
+										   dump.DataDumper(select(1, ...), nil, true)
 	local val = self.cache[key]
 	if val == nil then
 		val = self.func(...)
