@@ -68,22 +68,53 @@ jit.off()
 
 ----------------
 
-function bar(x)
-	print(debug.getinfo(1, 'p').frameid)
-	if x == 0 then
-		return x
-	else
-		return foo(x-1)
-	end
+-- function bar(x)
+-- 	print(debug.getinfo(1, 'p').frameid)
+-- 	if x == 0 then
+-- 		return x
+-- 	else
+-- 		return foo(x-1)
+-- 	end
+-- end
+
+-- function foo(x)
+-- 	print(debug.getinfo(1, 'p').frameid)
+-- 	if x == 0 then
+-- 		return x
+-- 	else
+-- 		return bar(x-1)
+-- 	end
+-- end
+
+-- foo(5)
+
+-------------------
+
+-- obj = {num = 42}
+
+-- function obj:call()
+-- 	print(self.num)
+-- end
+
+-- setmetatable(obj, {__call = obj.call})
+
+-- obj()
+
+--------------------
+
+memoize = require "probabilistic.memoize"
+erp = require "probabilistic.erp"
+
+function flip(x)
+   return erp.flip(x)
 end
 
-function foo(x)
-	print(debug.getinfo(1, 'p').frameid)
-	if x == 0 then
-		return x
-	else
-		return bar(x-1)
-	end
+memflip = memoize.mem(flip)
+
+for i=1,100 do
+   --print(memflip(0.5))
+   print(flip(0.5))
 end
 
-foo(5)
+
+

@@ -2,6 +2,7 @@ local trace = require "probabilistic.trace"
 local erp = require "probabilistic.erp"
 local inference = require "probabilistic.inference"
 local control = require "probabilistic.control"
+local memoize = require "probabilistic.memoize"
 
 module(...)
 
@@ -28,3 +29,6 @@ ntimes = control.ntimes
 foreach = control.foreach
 whilst = control.whilst
 replicate = control.replicate
+
+-- Forward mem export
+mem = memoize.mem

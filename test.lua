@@ -155,5 +155,64 @@ mhtest(
 	end, 
 	0.7599)
 
+mhtest(
+	"memoized flip, unconditioned",
+	function()
+		local proc = mem(function(x) return int2bool(flip(0.8)) end)
+		return bool2int(proc(1) and proc(2) and proc(1) and proc(2))
+	end,
+	0.64)
+
+mhtest(
+	"memoized flip, conditioned",
+	function()
+		local proc = mem(function(x) return int2bool(flip(0.2)) end)
+		condition(proc(1) or proc(2) or proc(2) or proc(2))
+		return bool2int(proc(1))
+	end,
+	0.5555555555555555)
+
+mhtest(
+	"bound symbol used inside memoizer, unconditioned",
+	function()
+		local a = flip(0.8)
+		local proc = mem(function(x) return int2bool(a) end)
+		return bool2int(proc(1) and proc(1))
+	end,
+	0.8)
+
+mhtest(
+	"memoized flip with random argument, unconditioned",
+	function()
+		local proc = mem(function(x) return int2bool(flip(0.8)) end)
+		return bool2int(proc(uniformDraw({1,2,3})) and proc(uniformDraw({1,2,3})))
+	end,
+	0.6933333333333334)
+
+mhtest(
+	"memoized random procedure, unconditioned",
+	function()
+		local proc = int2bool(flip(0.7)) and
+			(function(x) return int2bool(flip(0.2)) end) or
+			(function(x) return int2bool(flip(0.8)) end)
+		local memproc = mem(proc)
+		return bool2int(memproc(1) and memproc(2))
+	end,
+	0.22)
+
+mhtest(
+	"mh-query over rejection query for conditioned flip",
+	function()
+		local function bitflip(fidelity, x)
+			return int2bool(flip(x and fidelity or 1-fidelity))
+		end
+		local function innerQuery()
+			local a = int2bool(flip(0.7))
+			condition(bitflip(0.8, a))
+			return bool2int(a)
+		end
+		return rejectionSample(innerQuery)
+	end,
+	0.903225806451613)
 
 print("tests done!")
