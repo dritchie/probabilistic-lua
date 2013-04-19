@@ -15,6 +15,13 @@ flip = erp.flip
 multinomial = erp.multinomial
 multinomialDraw = erp.multinomialDraw
 uniformDraw = erp.uniformDraw
+uniform = erp.uniform
+gaussian = erp.gaussian
+gamma = erp.gamma
+beta = erp.beta
+binomial = erp.binomial
+poisson = erp.poisson
+dirichlet = erp.dirichlet
 
 -- Forward inference exports
 mean = inference.mean

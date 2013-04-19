@@ -207,7 +207,7 @@ local function gamma_sample(a, b)
 	local c = 1/math.sqrt(9*d)
 	while true do
 		repeat
-			x = gamma_sample(0, 1)
+			x = gaussian_sample(0, 1)
 			v = 1+c*x
 		until v > 0
 		v = v*v*v
@@ -232,7 +232,7 @@ local function log_gamma(xx)
 end
 
 function gamma_logprob(x, a, b)
-	return (a - 1)*math.log(x) - float(x)/b - log_gamma(a) - a*math.log(b)
+	return (a - 1)*math.log(x) - x/b - log_gamma(a) - a*math.log(b)
 end
 
 function GammaRandomPrimitive:sample_impl(params)
@@ -359,7 +359,7 @@ local function poisson_sample(mu)
 	while mu > 10 do
 		local m = 7/8*mu
 		local x = gamma_sample(m, 1)
-		if x > mu:
+		if x > mu then
 			return k + binomial_sample(mu/x, m-1)
 		else
 			mu = mu - x

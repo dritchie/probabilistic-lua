@@ -25,19 +25,180 @@ function mhtest(name, computation, trueExpectation, tolerance)
 	test(name, replicate(runs, function() return expectation(computation, traceMH, samples, lag) end), trueExpectation, tolerance)
 end
 
+function eqtest(name, estvalues, truevalues, tolerance)
+	tolerance = tolerance or errorTolerance
+	io.write("test: " .. name .. "...")
+	assert(table.getn(estvalues) == table.getn(truevalues))
+	for i=1,table.getn(estvalues) do
+		local estvalue = estvalues[i]
+		local truevalue = truevalues[i]
+		if math.abs(estvalue - truevalue) > tolerance then
+			print(string.format("failed! True value: %g | Test value: %g", truevalue, estvalue))
+			return
+		end
+	end
+	print "passed."
+end
+
 -------------------------
 
 print("starting tests...")
 
 
--- Tests adapted from Church
+-- ERP tests
 
-test("random, no query",
+test("flip sample",
 	 replicate(runs,
 	 	function() return mean(replicate(samples,
 	 		function() return flip(0.7) end))
 	 	end),
 	 0.7)
+
+mhtest(
+	"flip query",
+	function() return flip(0.7) end,
+	0.7)
+
+test("uniform sample",
+	 replicate(runs,
+	 	function() return mean(replicate(samples,
+	 		function() return uniform(0.1, 0.4) end))
+	 	end),
+	 0.5*(.1+.4))
+
+mhtest(
+	"uniform query",
+	function() return uniform(0.1, 0.4) end,
+	0.5*(.1+.4))
+
+test("multinomial sample",
+	 replicate(runs,
+	 	function() return mean(replicate(samples,
+	 		function() return multinomialDraw({.2, .3, .4}, {.2, .6, .2}) end))
+	 	end),
+	 0.2*.2 + 0.6*.3 + 0.2*.4)
+
+mhtest(
+	"multinomial query",
+	function() return multinomialDraw({.2, .3, .4}, {.2, .6, .2}) end,
+	0.2*.2 + 0.6*.3 + 0.2*.4)
+
+eqtest(
+	"multinomial lp",
+	{
+		erp.multinomial_logprob(1, {.2, .6, .2}),
+		erp.multinomial_logprob(2, {.2, .6, .2}),
+		erp.multinomial_logprob(3, {.2, .6, .2})
+	},
+	{math.log(0.2), math.log(0.6), math.log(0.2)})
+
+test("gaussian sample",
+	 replicate(runs,
+	 	function() return mean(replicate(samples,
+	 		function() return gaussian(0.1, 0.5) end))
+	 	end),
+	 0.1)
+
+mhtest(
+	"gaussian query",
+	function() return gaussian(0.1, 0.5) end,
+	0.1)
+
+eqtest(
+	"gaussian lp",
+	{
+		erp.gaussian_logprob(0, 0.1, 0.5),
+		erp.gaussian_logprob(0.25, 0.1, 0.5),
+		erp.gaussian_logprob(0.6, 0.1, 0.5)
+	},
+	{-0.2457913526447274, -0.27079135264472737, -0.7257913526447274})
+
+test("gamma sample",
+	 replicate(runs,
+	 	function() return mean(replicate(samples,
+	 		function() return gamma(2, 2)/10 end))
+	 	end),
+	0.4)
+
+mhtest(
+	"gamma query",
+	function() return gamma(2, 2)/10 end,
+	0.4)
+
+eqtest(
+	"gamma lp",
+	{
+		erp.gamma_logprob(1, 2, 2),
+		erp.gamma_logprob(4, 2, 2),
+		erp.gamma_logprob(8, 2, 2)
+	},
+	{-1.8862944092546166, -2.000000048134726, -3.306852867574781})
+
+test("beta sample",
+	 replicate(runs,
+	 	function() return mean(replicate(samples,
+	 		function() return beta(2, 5) end))
+	 	end),
+	2.0/(2+5))
+
+mhtest(
+	"beta query",
+	function() return beta(2, 5) end,
+	2.0/(2+5))
+
+eqtest(
+	"beta lp",
+	{
+		erp.beta_logprob(.1, 2, 5),
+		erp.beta_logprob(.2, 2, 5),
+		erp.beta_logprob(.6, 2, 5)
+	},
+	{0.677170196389683, 0.899185234324094, -0.7747911992475776})
+
+test("binomial sample",
+	 replicate(runs,
+	 	function() return mean(replicate(samples,
+	 		function() return binomial(.5, 40)/40 end))
+	 	end),
+	0.5)
+
+mhtest(
+	"binomial query",
+	function() return binomial(.5, 40)/40 end,
+	0.5)
+
+eqtest(
+	"binomial lp",
+	{
+		erp.binomial_logprob(15, .5, 40),
+		erp.binomial_logprob(20, .5, 40),
+		erp.binomial_logprob(30, .5, 40)
+	},
+	{-3.3234338674089985, -2.0722579911387817, -7.2840211276953575})
+
+test("poisson sample",
+	 replicate(runs,
+	 	function() return mean(replicate(samples,
+	 		function() return poisson(4)/10 end))
+	 	end),
+	0.4)
+
+mhtest(
+	"poisson query",
+	function() return poisson(4)/10 end,
+	0.4)
+
+eqtest(
+	"poisson lp",
+	{
+		erp.poisson_logprob(2, 4),
+		erp.poisson_logprob(5, 4),
+		erp.poisson_logprob(7, 4)
+	},
+	{-1.9205584583201643, -1.8560199371825927, -2.821100833226181})
+
+
+-- Tests adapted from Church
 
 mhtest(
 	"setting a flip",
@@ -49,11 +210,6 @@ mhtest(
 	end,
 	1/1000,
 	0.000000000000001)
-
-mhtest(
-	"unconditioned flip",
-	function() return flip(0.7) end,
-	0.7)
 
 mhtest(
 	"and conditioned on or",
@@ -214,5 +370,52 @@ mhtest(
 		return rejectionSample(innerQuery)
 	end,
 	0.903225806451613)
+
+mhtest(
+	"trans-dimensional",
+	function()
+		local a = int2bool(flip(0.9, true)) and beta(1,5) or 0.7
+		local b = flip(a)
+		condition(int2bool(b))
+		return a
+	end,
+	0.417)
+
+mhtest(
+	"memoized flip in if branch (create/destroy memprocs), unconditioned",
+	function()
+		local a = int2bool(flip()) and mem(flip) or mem(flip)
+		local b = a()
+		return b
+	end,
+	0.5)
+
+-- Tests for things specific to new implementation
+
+mhtest(
+	"native loop",
+	function()
+		local accum = 0
+		for i=1,4 do
+			accum = accum + flip()
+		end
+		return accum / 4
+	end,
+	0.5)
+
+mhtest(
+	"directly conditioning variable values",
+	function()
+		local accum = 0
+		for i=1,10 do
+			if i < 5 then
+				accum = accum + flip(0.5, false, 1)
+			else
+				accum = accum + flip(0.5)
+			end 
+		end
+		return accum / 10
+	end,
+	0.75)
 
 print("tests done!")
