@@ -30,6 +30,7 @@ expectation = inference.expectation
 MAP = inference.MAP
 rejectionSample = inference.rejectionSample
 traceMH = inference.traceMH
+LARJMH = inference.LARJMH
 
 -- Forward control exports
 ntimes = control.ntimes

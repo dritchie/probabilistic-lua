@@ -25,6 +25,11 @@ function mhtest(name, computation, trueExpectation, tolerance)
 	test(name, replicate(runs, function() return expectation(computation, traceMH, samples, lag) end), trueExpectation, tolerance)
 end
 
+function larjtest(name, computation, trueExpectation, tolerance)
+	tolerance = tolerance or errorTolerance
+	test(name, replicate(runs, function() return expectation(computation, LARJMH, samples, 10, nil, lag) end), trueExpectation, tolerance)
+end
+
 function eqtest(name, estvalues, truevalues, tolerance)
 	tolerance = tolerance or errorTolerance
 	io.write("test: " .. name .. "...")
@@ -373,6 +378,16 @@ mhtest(
 
 mhtest(
 	"trans-dimensional",
+	function()
+		local a = int2bool(flip(0.9, true)) and beta(1,5) or 0.7
+		local b = flip(a)
+		condition(int2bool(b))
+		return a
+	end,
+	0.417)
+
+larjtest(
+	"trans-dimensional (LARJ)",
 	function()
 		local a = int2bool(flip(0.9, true)) and beta(1,5) or 0.7
 		local b = flip(a)

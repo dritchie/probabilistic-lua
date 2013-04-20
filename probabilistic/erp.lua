@@ -25,8 +25,9 @@ function RandomPrimitive:logprob(val, params)
 end
 
 function RandomPrimitive:sample(params, isStructural, conditionedValue)
-	-- Assumes sample is called from one function higher (flip, gaussian, etc.)
-	return trace.lookupVariableValue(self, params, isStructural, 2, conditionedValue)
+	-- NOTE: The 4th arg is 0 instead of two because the two preceding calls are
+	-- tail calls
+	return trace.lookupVariableValue(self, params, isStructural, 0, conditionedValue)
 end
 
 function RandomPrimitive:proposal(currval, params)

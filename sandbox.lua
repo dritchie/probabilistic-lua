@@ -34,6 +34,7 @@ jit.off()
 -- 		print(tr:currentName(0))
 -- 		local function baz()
 -- 			print(tr:currentName(0))
+--          print(tr:currentName(0))
 -- 		end
 -- 		baz()
 -- 	end
@@ -140,8 +141,24 @@ jit.off()
 
 -------------------
 
-local thing = 2
-local function foo()
-   print(thing)
-end
-foo()
+-- local thing = 2
+-- local function foo()
+--    print(thing)
+-- end
+-- foo()
+
+-------------------
+
+-- pr = require "probabilistic"
+-- util = require "util"
+-- util.openpackage(pr)
+-- util.openpackage(util)
+
+-- function testcomp()
+--    local a = int2bool(flip())
+--    local b = int2bool(flip())
+--    condition(a or b)
+--    return bool2int(a and b)
+-- end
+
+-- traceMH(testcomp, 1000)

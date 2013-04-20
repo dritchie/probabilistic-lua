@@ -67,7 +67,7 @@ end
 
 function RandomExecutionTrace:freeVarNames(structural, nonstructural)
 	structural = (structural == nil) and true or structural
-	nonstructural = (nonstructural == nil) and true or structural
+	nonstructural = (nonstructural == nil) and true or nonstructural
 	return util.keys(
 		util.filter(
 			function(rec)
@@ -82,12 +82,11 @@ end
 function RandomExecutionTrace:varDiff(other)
 	local tbl = {}
 	for k,v in pairs(self.vars) do
-		tbl[k] = true
+		if not other.vars[k] then
+			table.insert(tbl, k)
+		end
 	end
-	for k,v in pairs(other.vars) do
-		tbl[k] = true
-	end
-	return util.keys(tbl)
+	return tbl
 end
 
 -- Difference in log probability between this trace and the other
@@ -95,9 +94,7 @@ end
 function RandomExecutionTrace:lpDiff(other)
 	return util.sum(
 		util.map(
-			function(name)
-				return self.vars[name].logprob
-			end,
+			function(name) return self.vars[name].logprob end,
 			self:varDiff(other)))
 end
 
@@ -122,7 +119,7 @@ function RandomExecutionTrace:traceUpdate()
 	end
 
 	-- Mark that this is the 'root' frame of the current execution trace
-	self.rootframe = debug.getinfo(1, 'p').frameid
+	self.rootframe = debug.getinfo(1, 'p').fnprotoid
 
 	-- Run the computation, which will create/lookup random variables
 	-- NOTE: Turning the JIT off like this is definitely safe (interpreter
@@ -172,11 +169,12 @@ function RandomExecutionTrace:currentName(numFrameSkip)
 	-- Get list of frames from the root frame to the current frame
 	local i = 2 + numFrameSkip
 	local flst = {}
+	local f = nil
 	repeat
-		local f = debug.getinfo(i, 'p')
-		table.insert(flst, f)
+		f = debug.getinfo(i, 'p')
+		table.insert(flst, 1, f)
 		i = i + 1
-	until not f or (self.rootframe and f.frameid == self.rootframe)
+	until not f or (self.rootframe and f.fnprotoid == self.rootframe)
 
 	-- Build up name string, checking loop counters along the way
 	local name = ""
@@ -193,7 +191,6 @@ function RandomExecutionTrace:currentName(numFrameSkip)
 	self.loopcounters[name] = loopnum + 1
 	name = string.format("%s:%d|", name, loopnum)
 
-	--print(name)
 	return name
 end
 
