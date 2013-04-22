@@ -196,7 +196,7 @@ function RandomExecutionTrace:currentName(numFrameSkip)
 end
 
 -- Looks up the value of a random variable.
--- Create sthe variable if it does not already exist
+-- Creates the variable if it does not already exist
 function RandomExecutionTrace:lookup(name, erp, params, isStructural, conditionedValue)
 	local record  = self.vars[name]
 	if not record or
