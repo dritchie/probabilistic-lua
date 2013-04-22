@@ -9,14 +9,15 @@ local RandomVariableRecord = {}
 function RandomVariableRecord:new(erp, params, val, logprob, structural, conditioned)
 	conditioned = (conditioned == nil) and false or conditioned
 	local newobj = { erp = erp, params = params, val = val, logprob = logprob,
-			   structural = structural, conditioned = conditioned }
+			   active = true, structural = structural, conditioned = conditioned }
 	setmetatable(newobj, self)
 	self.__index = self
 	return newobj
 end
 
 function RandomVariableRecord:copy()
-	return RandomVariableRecord:new(self.erp, self.params, self.val, self.logprob, self.structural, self.conditioned)
+	return RandomVariableRecord:new(self.erp, self.params, self.val, self.logprob,
+									self.structural, self.conditioned)
 end
 
 
@@ -34,7 +35,8 @@ function RandomExecutionTrace:new(computation, doRejectionInit)
 		oldlogprob = 0.0,
 		rootframe = nil,
 		loopcounters = {},
-		conditionsSatisfied = false
+		conditionsSatisfied = false,
+		returnValue = nil
 	}
 	setmetatable(newobj, self)
 	self.__index = self
@@ -57,7 +59,6 @@ function RandomExecutionTrace:deepcopy()
 	newdb.conditionsSatisfied = self.conditionsSatisfied
 	newdb.returnValue = self.returnValue
 
-	newdb.vars = {}
 	for k,v in pairs(self.vars) do
 		newdb.vars[k] = v:copy()
 	end
