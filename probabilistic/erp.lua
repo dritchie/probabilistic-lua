@@ -1,5 +1,4 @@
 local trace = require "probabilistic.trace"
-local control = require "probabilistic.control"
 local util = require "util"
 
 module(..., package.seeall)
