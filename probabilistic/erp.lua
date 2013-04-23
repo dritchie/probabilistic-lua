@@ -429,7 +429,7 @@ local function dirichlet_sample(alpha)
 		ssum = ssum + t
 	end
 	for i,t in ipairs(theta) do
-		theta[i] = t / ssum
+		theta[i] = theta[i] / ssum
 	end
 	return theta
 end
