@@ -319,7 +319,7 @@ function traceMH(computation, numsamps, lag, verbose)
 end
 
 -- Sample from a probabilistic computation using locally
--- annealing reversible jump mcmc
+-- annealed reversible jump mcmc
 function LARJMH(computation, numsamps, annealSteps, jumpFreq, lag, verbose)
 	lag = (lag == nil) and 1 or lag
 	return mcmc(computation,
