@@ -162,7 +162,7 @@ function LARJInterpolationTrace:proposeChange(varname)
 	local fwdPropLP = var.erp:logProposalProb(var.val, propval, var.params)
 	local rvsPropLP = var.erp:logProposalProb(propval, var.val, var.params)
 	if var1 then
-		var.val = propval
+		var1.val = propval
 		var1.logprob = var1.erp:logprob(var1.val, var1.params)
 		nextTrace.trace1:traceUpdate()
 	end
@@ -247,7 +247,7 @@ function LARJKernel:jumpStep(currTrace)
 		and self.annealSteps > 0 then
 		local lerpTrace = LARJInterpolationTrace:new(oldStructTrace, newStructTrace)
 		local prevAccepted = self.diffusionKernel.proposalsAccepted
-		for aStep=1,self.annealSteps do
+		for aStep=0,self.annealSteps-1 do
 			lerpTrace.alpha = aStep/(self.annealSteps-1)
 			annealingLpRatio = annealingLpRatio + lerpTrace.logprob
 			lerpTrace = self.diffusionKernel:next(lerpTrace)
