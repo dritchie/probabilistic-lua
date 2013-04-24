@@ -77,7 +77,7 @@ local function multinomial_sample(theta)
 	local x = math.random() * util.sum(theta)
 	local probAccum = 0.00000001
 	local k = table.getn(theta)
-	while result < k and x > probAccum do
+	while result <= k and x > probAccum do
 		probAccum = probAccum + theta[result]
 		result = result + 1
 	end
