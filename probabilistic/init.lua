@@ -1,8 +1,10 @@
-local trace = require "probabilistic.trace"
-local erp = require "probabilistic.erp"
-local inference = require "probabilistic.inference"
-local control = require "probabilistic.control"
-local memoize = require "probabilistic.memoize"
+local dirOfThisFile = (...):match("(.-)[^%.]+$")
+
+local trace = require(dirOfThisFile .. "trace")
+local erp = require(dirOfThisFile .. "erp")
+local inference = require(dirOfThisFile .. "inference")
+local control = require(dirOfThisFile .. "control")
+local memoize = require(dirOfThisFile .. "memoize")
 
 module(...)
 

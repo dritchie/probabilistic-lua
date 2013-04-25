@@ -1,4 +1,6 @@
-local util = require "util"
+local dirOfThisFile = (...):match("(.-)[^%.]+$")
+
+local util = require(dirOfThisFile .. "util")
 
 module(..., package.seeall)
 

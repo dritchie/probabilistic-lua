@@ -1,6 +1,8 @@
-local util = require "util"
+local dirOfThisFile = (...):match("(.-)[^%.]+$")
+
+local util = require(dirOfThisFile .. "util")
 util.openpackage(util)
-local pr = require "probabilistic"
+local pr = require(dirOfThisFile .. "init")
 openpackage(pr)
 
 samples = 150

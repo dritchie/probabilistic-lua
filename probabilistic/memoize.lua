@@ -1,4 +1,6 @@
-local dump = require "dump"
+local dirOfThisFile = (...):match("(.-)[^%.]+$")
+
+local dump = require(dirOfThisFile .. "dump")
 
 module(..., package.seeall)
 
