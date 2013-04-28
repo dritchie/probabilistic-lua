@@ -49,6 +49,8 @@ end
 
 -------------------------
 
+local t1 = os.clock()
+
 print("starting tests...")
 
 
@@ -436,3 +438,8 @@ mhtest(
 	0.75)
 
 print("tests done!")
+
+local t2 = os.clock()
+print("time: " .. (t2 - t1))
+
+
