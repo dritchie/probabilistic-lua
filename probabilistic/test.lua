@@ -440,4 +440,6 @@ mhtest(
 print("tests done!")
 
 local t2 = os.clock()
-print("time: " .. t2 - t1)
+print("time: " .. (t2 - t1))
+
+
