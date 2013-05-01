@@ -86,12 +86,12 @@ function RandomWalkKernel:next(currTrace)
 	-- and generate another sample (this may not actually be deterministic,
 	-- in the case of nested query)
 	if not name then
-		currTrace:traceUpdate()
+		currTrace:traceUpdate(not self.structural)
 		return currTrace
 	-- Otherwise, make a proposal for a randomly-chosen variable, probabilistically
 	-- accept it
 	else
-		local nextTrace, fwdPropLP, rvsPropLP = currTrace:proposeChange(name)
+		local nextTrace, fwdPropLP, rvsPropLP = currTrace:proposeChange(name, not self.structural)
 		fwdPropLP = fwdPropLP - math.log(table.getn(currTrace:freeVarNames(self.structural, self.nonstructural)))
 		rvsPropLP = rvsPropLP - math.log(table.getn(nextTrace:freeVarNames(self.structural, self.nonstructural)))
 		local acceptThresh = nextTrace.logprob - currTrace.logprob + rvsPropLP - fwdPropLP
@@ -150,7 +150,8 @@ function LARJInterpolationTrace:freeVarNames(structural, nonstructural)
 	return util.keys(set)
 end
 
-function LARJInterpolationTrace:proposeChange(varname)
+function LARJInterpolationTrace:proposeChange(varname, structureIsFixed)
+	assert(structureIsFixed)
 	local var1 = self.trace1:getRecord(varname)
 	local var2 = self.trace2:getRecord(varname)
 	local nextTrace = LARJInterpolationTrace:new(var1 and self.trace1:deepcopy() or self.trace1,
@@ -166,12 +167,12 @@ function LARJInterpolationTrace:proposeChange(varname)
 	if var1 then
 		var1.val = propval
 		var1.logprob = var1.erp:logprob(var1.val, var1.params)
-		nextTrace.trace1:traceUpdate()
+		nextTrace.trace1:traceUpdate(structureIsFixed)
 	end
 	if var2 then
 		var2.val = propval
 		var2.logprob = var2.erp:logprob(var2.val, var2.params)
-		nextTrace.trace2:traceUpdate()
+		nextTrace.trace2:traceUpdate(structureIsFixed)
 	end
 	return nextTrace, fwdPropLP, rvsPropLP
 end

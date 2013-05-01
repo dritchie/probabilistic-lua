@@ -26,8 +26,8 @@ function RandomPrimitive:logprob(val, params)
 end
 
 function RandomPrimitive:sample(params, isStructural, conditionedValue)
-	-- NOTE: The 4th arg is 0 instead of two because the two preceding calls are
-	-- tail calls
+	-- NOTE: The 4th arg is 0 instead of 2 because the calls to 'sample'
+	-- and 'lookupVariableValue' are both tail calls
 	return trace.lookupVariableValue(self, params, isStructural, 0, conditionedValue)
 end
 

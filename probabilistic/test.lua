@@ -24,7 +24,8 @@ end
 
 function mhtest(name, computation, trueExpectation, tolerance)
 	tolerance = tolerance or errorTolerance
-	test(name, replicate(runs, function() return expectation(computation, traceMH, samples, lag) end), trueExpectation, tolerance)
+	--test(name, replicate(runs, function() return expectation(computation, traceMH, samples, lag) end), trueExpectation, tolerance)
+	test(name, replicate(runs, function() return expectation(computation, LARJMH, samples, 0, nil, lag) end), trueExpectation, tolerance)
 end
 
 function larjtest(name, computation, trueExpectation, tolerance)
@@ -324,7 +325,11 @@ mhtest(
 	"memoized flip, unconditioned",
 	function()
 		local proc = mem(function(x) return int2bool(flip(0.8)) end)
-		return bool2int(proc(1) and proc(2) and proc(1) and proc(2))
+		local p11 = proc(1)
+		local p21 = proc(2)
+		local p12 = proc(1)
+		local p22 = proc(2)
+		return bool2int(p11 and p21 and p12 and p22)
 	end,
 	0.64)
 
@@ -332,7 +337,11 @@ mhtest(
 	"memoized flip, conditioned",
 	function()
 		local proc = mem(function(x) return int2bool(flip(0.2)) end)
-		condition(proc(1) or proc(2) or proc(2) or proc(2))
+		local p1 = proc(1)
+		local p21 = proc(2)
+		local p22 = proc(2)
+		local p23 = proc(2)
+		condition(p1 or p21 or p22 or p23)
 		return bool2int(proc(1))
 	end,
 	0.5555555555555555)
@@ -342,7 +351,9 @@ mhtest(
 	function()
 		local a = flip(0.8)
 		local proc = mem(function(x) return int2bool(a) end)
-		return bool2int(proc(1) and proc(1))
+		local p11 = proc(1)
+		local p12 = proc(1)
+		return bool2int(p11 and p12)
 	end,
 	0.8)
 
@@ -350,7 +361,9 @@ mhtest(
 	"memoized flip with random argument, unconditioned",
 	function()
 		local proc = mem(function(x) return int2bool(flip(0.8)) end)
-		return bool2int(proc(uniformDraw({1,2,3})) and proc(uniformDraw({1,2,3})))
+		local p1 = proc(uniformDraw({1,2,3}))
+		local p2 = proc(uniformDraw({1,2,3}))
+		return bool2int(p1 and p2)
 	end,
 	0.6933333333333334)
 
@@ -361,7 +374,9 @@ mhtest(
 			(function(x) return int2bool(flip(0.2)) end) or
 			(function(x) return int2bool(flip(0.8)) end)
 		local memproc = mem(proc)
-		return bool2int(memproc(1) and memproc(2))
+		local mp1 = memproc(1)
+		local mp2 = memproc(2)
+		return bool2int(mp1 and mp2)
 	end,
 	0.22)
 
