@@ -139,9 +139,9 @@ function RandomExecutionTrace:traceUpdate(structureIsFixed)
 	-- NOTE: Turning the JIT off like this is definitely safe (interpreter
 	--	stack will be preserved where we need it), but it may be overly
 	--  conservative (we may be able to turn the JIT back on at some parts...) 
-	jit.off()
+	--jit.off()
 	self.returnValue = self.computation()
-	jit.on()
+	--jit.on()
 
 	-- Clean up
 	self.rootframe = nil
@@ -177,6 +177,10 @@ function RandomExecutionTrace:proposeChange(varname, structureIsFixed)
 	return nextTrace, fwdPropLP, rvsPropLP
 end
 
+-- local logfile = io.open("log.csv", "w")
+-- local iteration = 0
+-- logfile:write("iteration,numframes\n")
+
 -- Return the current structural name, as determined by the interpreter stack
 function RandomExecutionTrace:currentName(numFrameSkip)
 	
@@ -189,6 +193,8 @@ function RandomExecutionTrace:currentName(numFrameSkip)
 		table.insert(flst, 1, f)
 		i = i + 1
 	until not f or (self.rootframe and f.fnprotoid == self.rootframe)
+	-- logfile:write(iteration .. "," .. table.getn(flst) .. "\n")
+	-- iteration = iteration + 1
 
 	-- Build up name string, checking loop counters along the way
 	local name = ""
