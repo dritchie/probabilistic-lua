@@ -65,6 +65,12 @@ function copytable(tab)
 	return newtbl
 end
 
+function copytablemembers(srctab, dsttab)
+	for k,v in pairs(srctab) do
+		dsttab[k] = v
+	end
+end
+
 function randomChoice(tbl)
 	local n = table.getn(tbl)
 	if n > 0 then
