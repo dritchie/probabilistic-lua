@@ -4,6 +4,10 @@ local util = require(dirOfThisFile .. "util")
 module(..., package.seeall)
 
 
+-----------------------------------------------------------
+--  Intermediate representation - Arithmetic expressions --
+-----------------------------------------------------------
+
 local IRNode = {}
 
 function IRNode:new(name)
@@ -158,19 +162,21 @@ function IRCppFuncNode:new(name, arglist)
 	return newobj
 end
 
--- TODO: Define __tostring and emitCode for IRCppFuncNode
+-- TODO: Define __tostring and emitCode for IRCppFuncNode??
 
 
 -- These refer to variables that are either inputs to the overall trace function
 -- or intermediates created during CSE
 local IRVarNode = IRNode:new()
 
-function IRVarNode:new(name)
-	return IRNode.new(self, name)
+function IRVarNode:new(name, type)
+	local newobj = IRNode.new(self, name)
+	newobj.type = type
+	return newobj
 end
 
 function IRVarNode:__tostring(tablevel)
-	return tabify(string.format("IRVarNode: %s", self.name), tablevel)
+	return tabify(string.format("IRVarNode: %s %s", self.type, self.name), tablevel)
 end
 
 function IRVarNode:emitCode()
@@ -178,31 +184,121 @@ function IRVarNode:emitCode()
 end
 
 
--- These'll be used to store intermediates created during CSE
-local IRAssignmentNode = IRNode:new()
+-----------------------------------------------------
+--  Intermediate representation - Other statements --
+-----------------------------------------------------
 
-function IRAssignmentNode:new(lhs, rhs)
-	local newobj = IRNode.new(self, lhs)
-	table.insert(newobj.inputs, IRNode.nodify(rhs))
+
+-- These'll be used to store intermediates created during CSE
+local IRVarDefinition = {}
+
+-- 'lhs' is an IRVarNode
+-- 'rhs' is an IRNode or a constant
+function IRVarDefinition:new(lhs, rhs, type)
+	local newobj =
+	{
+		lhs = lhs,
+		rhs = IRNode.nodify(rhs),
+		type = type
+	}
+	setmetatable(newobj, self)
+	self.__index = self
 	return newobj
 end
 
-function IRAssignmentNode:__tostring(tablevel)
+function IRVarDefinition:__tostring(tablevel)
 	tablevel = tablevel or 0
-	return tabify(string.format("IRAssignmentNode: %s\n%s",
-		self.name, self.inputs[1]:__tostring(tablevel+1)), tablevel)
+	return tabify(string.format("IRVarDefinition: %s %s\n%s",
+		self.type, self.lhs, self.rhs:__tostring(tablevel+1)), tablevel)
 end
 
-function IRAssignmentNode:emitCode()
-	-- TODO: Replace 'double' with 'stan::agrad::var'
-	return string.format("double %s = (%s)", self.name, self.inputs[1]:emitCode())
+function IRVarDefinition:emitCode()
+	return string.format("%s %s = (%s);", self.type, self.lhs:emitCode(), self.rhs:emitCode())
+end
+
+
+-- A return statement for returning from functions
+local IRReturnStatement = {}
+
+function IRReturnStatement:new(exp)
+	local newobj = 
+	{
+		exp = exp
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function IRReturnStatement:__tostring(tablevel)
+	return tabify(string.format("IRReturnStatement:\n%s", self.exp:__tostring(tablevel+1)), tablevel)
+end
+
+function IRReturnStatement:emitCode()
+	return string.format("return %s;", self.exp:emitCode())
+end
+
+
+-- A list of IR statements can be wrapped into a function
+local IRFunctionDefinition = {}
+
+-- 'args' is a list of IRVarNodes representing numeric variables
+-- 'bodylist' is a list of IR statements (expression nodes, assignments, etc.)
+-- The return value of the function is the last item in 'bodylist' and is assumed to
+--   be a numeric-valued expression
+function IRFunctionDefinition:new(name, rettype, args, bodylist)
+	local newobj =
+	{
+		name = name,
+		rettype = self.rettype,
+		args = args,
+		bodylist = bodylist
+	}
+	local n = table.getn(newobj.bodylist)
+	newobj.bodylist[n] = IRReturnStatement:new(newobj.bodylist[n])
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function IRFunctionDefinition:__tostring(tablevel)
+	tablevel = tablevel or 0
+	local str = tabify(string.format("IRFunctionDefinition: %s %s\n",
+		self.type, self.name), tablevel)
+	str = str .. tabify("args:\n", tablevel+1)
+	for i,a in ipairs(self.args) do
+		str = str .. string.format("%s\n", a:__tostring(tablevel+2))
+	end
+	str = str .. tabify("body:\n", tablevel+1)
+	for i,b in ipairs(self.bodylist) do
+		str = str .. string.format("%s\n", b:__tostring(tablevel+2))
+	end
+
+	return str
+end
+
+function IRFunctionDefinition:emitCode()
+	local str = string.format("%s %s(", self.rettype, self.name)
+	local numargs = table.getn(self.args)
+	for i,a in ipairs(self.args) do
+		local postfix = i == numargs and "" or ", "
+		str = string.format("%s%s %s%s", str, a.type, a:emitCode(), postfix)
+	end
+	str = string.format("%s)\n{\n", str)
+	local bodysize = table.getn(self.bodylist)
+	for i,b in ipairs(self.bodylist) do
+		str = string.format("%s    %s\n", str, b:emitCode())
+	end
+	str = string.format("%s\n}\n", str)
+	return str
 end
 
 
 
----------------------------------------------------------------
---     Lifted math operators and replacement math module     --
----------------------------------------------------------------
+-------------------------------------------------------
+-- Lifted math operators and replacement math module --
+-------------------------------------------------------
+
 
 local function wrapUnaryMathFunc(origfn, wrapfn)
 	local function wrapper(arg)
@@ -319,7 +415,6 @@ util.copytablemembers(operators, IRUnaryOpNode)
 util.copytablemembers(operators, IRBinaryOpNode)
 util.copytablemembers(operators, IRUnaryPrimFuncNode)
 util.copytablemembers(operators, IRBinaryPrimFuncNode)
-util.copytablemembers(operators, IRAssignmentNode)
 util.copytablemembers(operators, IRCppFuncNode)
 
 -- Math functions --
@@ -362,16 +457,45 @@ addWrappedBinaryFuncs(irmath, {
 })
 
 
--- Setting/unsetting mathtracing mode --
+------------------------------------
+-- Publicly visible functionality --
+------------------------------------
 
+-- Toggling mathtracing mode --
 local gmath = nil
+local _on = false
 function on()
+	_on = true
 	gmath = math
 	_G["math"] = irmath
 end
-
 function off()
+	_on = false
 	_G["math"] = gmath
+end
+function isOn()
+	return _on
+end
+
+
+-- What's the fundamental number type we're using?
+-- Can be "double" or "stan::agrad::var"
+local numtype = "double"
+function numberType()
+	return numtype
+end
+function setNumberType(newnumtype)
+	numtype = newnumtype
+end
+
+
+-- Client code needs to be able to create free variables
+function makeVar(name, type)
+	return IRVarNode:new(name, type)
+end
+-- ...and for the time being, create functions
+function makeFunction(name, rettype, args, bodylist)
+	return IRFunctionDefinition:new(name, rettype, args, bodylist)
 end
 
 

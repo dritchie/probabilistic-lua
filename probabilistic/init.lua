@@ -3,6 +3,7 @@ local dirOfThisFile = (...):match("(.-)[^%.]+$")
 local trace = require(dirOfThisFile .. "trace")
 local erp = require(dirOfThisFile .. "erp")
 local inference = require(dirOfThisFile .. "inference")
+local cinference = reuquire(dirOfThisFile .. "compiledInference")
 local control = require(dirOfThisFile .. "control")
 local memoize = require(dirOfThisFile .. "memoize")
 
@@ -33,6 +34,9 @@ MAP = inference.MAP
 rejectionSample = inference.rejectionSample
 traceMH = inference.traceMH
 LARJMH = inference.LARJMH
+
+-- Forward compiled inference exports
+fixedStructureDriftMH = cinference.fixedStructureDriftMH
 
 -- Forward control exports
 ntimes = control.ntimes

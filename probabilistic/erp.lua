@@ -25,10 +25,10 @@ function RandomPrimitive:logprob(val, params)
 	error("ERP subclasses must implement logprob!")
 end
 
-function RandomPrimitive:sample(params, isStructural, conditionedValue)
+function RandomPrimitive:sample(params, isStructural, conditionedValue, annotation)
 	-- NOTE: The 4th arg is 0 instead of 2 because the calls to 'sample'
 	-- and 'lookupVariableValue' are both tail calls
-	return trace.lookupVariableValue(self, params, isStructural, 0, conditionedValue)
+	return trace.lookupVariableValue(self, params, isStructural, 0, conditionedValue, annotation)
 end
 
 function RandomPrimitive:proposal(currval, params)

@@ -62,7 +62,7 @@ end
 
 -- MCMC transition kernel that takes random walks by tweaking a
 -- single variable at a time
-local RandomWalkKernel = {}
+RandomWalkKernel = {}
 
 function RandomWalkKernel:new(structural, nonstructural)
 	structural = (structural == nil) and true or structural
@@ -150,6 +150,12 @@ function LARJInterpolationTrace:freeVarNames(structural, nonstructural)
 	return util.keys(set)
 end
 
+function LARJInterpolationTrace:getRecord(varname)
+	local var1 = self.trace1:getRecord(varname)
+	local var2 = self.trace2:getRecord(varname)
+	return var1 or var2
+end
+
 function LARJInterpolationTrace:proposeChange(varname, structureIsFixed)
 	assert(structureIsFixed)
 	local var1 = self.trace1:getRecord(varname)
@@ -179,7 +185,7 @@ end
 
 
 -- MCMC transition kernel that does reversible jumps using the LARJ algorithm
-local LARJKernel = {}
+LARJKernel = {}
 
 function LARJKernel:new(diffusionKernel, annealSteps, jumpFreq)
 	local newobj = {

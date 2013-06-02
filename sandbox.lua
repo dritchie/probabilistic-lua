@@ -1,6 +1,6 @@
 
 -- Can't have the JIT if we're using the debug library
-jit.off()
+--jit.off()
 
 -- function foo()
 -- 	local function bar(num1, num2)
@@ -162,3 +162,14 @@ jit.off()
 -- end
 
 -- traceMH(testcomp, 1000)
+
+-------------------
+
+pr = require "probabilistic"
+util = require "util"
+util.openpackage(pr)
+
+function circleOfDots()
+	--
+end
+
