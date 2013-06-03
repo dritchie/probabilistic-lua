@@ -247,7 +247,7 @@ function IRFunctionDefinition:new(name, rettype, args, bodylist)
 	local newobj =
 	{
 		name = name,
-		rettype = self.rettype,
+		rettype = rettype,
 		args = args,
 		bodylist = bodylist
 	}

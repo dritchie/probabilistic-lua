@@ -220,6 +220,17 @@ function circleOfDots()
 	return points
 end
 
-LARJMH(circleOfDots, 10000)
---fixedStructureDriftMH(circleOfDots, {}, 0.25, 10000)
-print("done")
+-----------
+
+local numsamps = 100000
+
+local t11 = os.clock()
+LARJMH(circleOfDots, numsamps)
+local t12 = os.clock()
+
+local t21 = os.clock()
+fixedStructureDriftMH(circleOfDots, {}, 0.25, numsamps)
+local t22 = os.clock()
+
+print(string.format("Uncompiled: %g", (t12 - t11)))
+print(string.format("Compiled: %g", (t22 - t21)))

@@ -34,12 +34,12 @@ function CompiledGaussianDriftKernel:next(currTrace)
 	end
 
 	-- Get the nonstructurals, extract their values and bandwidths
-	local nonStructVars = currTrace.freeVarNames(false, true)
+	local nonStructVars = currTrace:freeVarNames(false, true)
 	local numVars = table.getn(nonStructVars)
 	local valArray = terralib.new(double[numVars])
 	local bwArray = terralib.new(double[numVars])
-	for i,n in nonStructVars do
-		local rec = currTrace.getRecord(n)
+	for i,n in ipairs(nonStructVars) do
+		local rec = currTrace:getRecord(n)
 		valArray[i-1] = rec.val
 		bwArray[i-1] = self.bandwidthMap[rec.annotation] or self.defaultBandwidth
 	end
@@ -55,7 +55,7 @@ function CompiledGaussianDriftKernel:next(currTrace)
 
 	-- Copy values back into the trace
 	for i=1,numVars do
-		currTrace.getRecord(nonStructVars[i]).val = valArray[i-1]
+		currTrace:getRecord(nonStructVars[i]).val = valArray[i-1]
 	end
 	currTrace.logprob = newlp
 
@@ -68,18 +68,18 @@ function CompiledGaussianDriftKernel:needsRecompile(currTrace)
 	end
 	-- Check if every variable from the current
 	-- trace is in our last-encountered structure and vice-versa
-	local svarnames = currTrace.freeVarNames(true, false)
+	local svarnames = currTrace:freeVarNames(true, false)
 	-- Direction 1: Is every struct. var in the current trace also in
 	-- our last-encountered structure?
-	for i,n in svarnames do
+	for i,n in ipairs(svarnames) do
 		if not self.structuralVars[n] then
 			return true
 		end
 	end
 	-- Direction 2: Is every var in our last encountered structure
 	-- also in the current trace?
-	for n,v in self.structuralVars do
-		if not currTrace.getRecord(n) then
+	for n,v in pairs(self.structuralVars) do
+		if not currTrace:getRecord(n) then
 			return true
 		end
 	end
@@ -92,9 +92,9 @@ function CompiledGaussianDriftKernel:compile(currTrace)
 	local savedLP = currTrace.logprob
 	mt.setNumberType("double")
 	mt.on()
-	currTrace.traceUpdate(true)
+	currTrace:traceUpdate(true)
 	mt.off()
-	local nonStructVars = currTrace.freeVarNames(false, true)
+	local nonStructVars = currTrace:freeVarNames(false, true)
 	local argArray = mt.makeVar("vars", "double*")
 	local fn = mt.makeFunction("logprob", "double", {argArray}, {currTrace.logprob})
 	local C = terralib.includecstring(
@@ -129,7 +129,7 @@ end
 -- Returns the new log probability
 -- Also returns true if the proposal was accepted 
 terra CompiledGaussianDriftKernel.step(numVars : int, vals : &double, bandwidths: &double,
-									   currLP: double, lpfn: &double -> double) : {double, bool}
+									   currLP: double, lpfn: {&double} -> {double}) : {double, bool}
 	-- Pick a random variable
 	var i = [int](cstdlib.random() / numVars)
 	var v = vals[i]
