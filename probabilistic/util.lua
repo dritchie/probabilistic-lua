@@ -90,7 +90,7 @@ end
 
 function M.openpackage(ns)
 	for n,v in pairs(ns) do
-		_G[n] = v
+		rawset(_G, n, v)
 	end
 end
 
