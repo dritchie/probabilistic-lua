@@ -241,7 +241,7 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 	else
 		record.annotation = annotation
 		record.conditioned = (conditionedValue ~= nil)
-		hasChanges = false
+		local hasChanges = false
 		if not util.arrayequals(record.params, params) then
 			record.params = params
 			hasChanges = true

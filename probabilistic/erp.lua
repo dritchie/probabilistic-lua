@@ -291,7 +291,7 @@ local function binomial_sample(p, n)
 	while n > N do
 		a = 1 + math.floor(n/2)
 		b = 1 + n-a
-		x = beta_sample(a, b)
+		local x = beta_sample(a, b)
 		if x >= p then
 			n = a - 1
 			p = p / x

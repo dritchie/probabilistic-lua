@@ -58,7 +58,7 @@ function M.cleartable(tab)
 end
 
 function M.copytable(tab)
-	newtbl = {}
+	local newtbl = {}
 	for k,v in pairs(tab) do
 		newtbl[k] = v
 	end

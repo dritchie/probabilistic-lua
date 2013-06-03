@@ -182,8 +182,8 @@ function circleOfDots()
 		return math.sqrt(xdiff*xdiff + ydiff*ydiff)
 	end
 	local function angDP(p1, p2, p3)
-		local v1 = {p1.x - p2.x, p1.y - p2.y}
-		local v2 = {p3.x - p2.x, p3.y - p2.y}
+		local v1 = { x = p1.x - p2.x, y = p1.y - p2.y}
+		local v2 = { x = p3.x - p2.x, y = p3.y - p2.y}
 		return (v1.x*v2.x + v1.y*v2.y) / (norm(v1)*norm(v2))
 	end
 
@@ -204,15 +204,15 @@ function circleOfDots()
 
 	-- distance between pairs factors
 	for i=0,numDots-1 do
-		local j = (i+1 % numDots) + 1
+		local j = ((i+1) % numDots) + 1
 		local d = dist(points[i+1], points[j])
 		factor(erp.gaussian_logprob(d, targetdist, distsd))
 	end
 
 	-- angle between triples factors
 	for i=0,numDots-1 do
-		local j = (i+1 % numDots)+1
-		local k = (i+2 % numDots)+1
+		local j = ((i+1) % numDots)+1
+		local k = ((i+2) % numDots)+1
 		local dp = angDP(points[i+1], points[j], points[k])
 		factor(erp.gaussian_logprob(dp, targetdp, dpsd))
 	end
@@ -220,6 +220,6 @@ function circleOfDots()
 	return points
 end
 
-LARJMH(circleOfDots, 1000)
---fixedStructureDriftMH(circleOfDots, {}, 0.25, 1000)
+LARJMH(circleOfDots, 10000)
+--fixedStructureDriftMH(circleOfDots, {}, 0.25, 10000)
 print("done")
