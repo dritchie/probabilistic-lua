@@ -1,7 +1,5 @@
-local dirOfThisFile = (...):match("(.-)[^%.]+$")
-
-local trace = require(dirOfThisFile .. "trace")
-local util = require(dirOfThisFile .. "util")
+local trace = require("probabilistic.trace")
+local util = require("probabilistic.util")
 
 module(..., package.seeall)
 

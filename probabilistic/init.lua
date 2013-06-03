@@ -1,11 +1,9 @@
-local dirOfThisFile = (...):match("(.-)[^%.]+$")
-
-local trace = require(dirOfThisFile .. "trace")
-local erp = require(dirOfThisFile .. "erp")
-local inference = require(dirOfThisFile .. "inference")
-local cinference = terralib.require(dirOfThisFile .. "compiledInference")
-local control = require(dirOfThisFile .. "control")
-local memoize = require(dirOfThisFile .. "memoize")
+local trace = require("probabilistic.trace")
+local erp = require("probabilistic.erp")
+local inference = require("probabilistic.inference")
+local cinference = terralib and terralib.require("probabilistic.compiledInference") or nil
+local control = require("probabilistic.control")
+local memoize = require("probabilistic.memoize")
 
 module(...)
 
@@ -36,7 +34,9 @@ traceMH = inference.traceMH
 LARJMH = inference.LARJMH
 
 -- Forward compiled inference exports
-fixedStructureDriftMH = cinference.fixedStructureDriftMH
+if cinference then
+	fixedStructureDriftMH = cinference.fixedStructureDriftMH
+end
 
 -- Forward control exports
 ntimes = control.ntimes

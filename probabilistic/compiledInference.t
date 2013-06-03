@@ -1,6 +1,6 @@
-local util = require("util")
-local mt = require("mathtracing")
-local inf = require("inference")
+local util = require("probabilistic.util")
+local mt = require("probabilistic.mathtracing")
+local inf = require("probabilistic.inference")
 
 
 -- An MCMC kernel that performs fixed-structure gaussian drift
@@ -156,7 +156,7 @@ end
 
 -- Sample from a fixed-structure probabilistic computation for some
 -- number of iterations using compiled Gaussian drift MH
-function fixedStructureDriftMH(computation, bandwidthMap, defaultBandwidth, numsamps, lag, verbose)
+local function fixedStructureDriftMH(computation, bandwidthMap, defaultBandwidth, numsamps, lag, verbose)
 	lag = (lag == nil) and 1 or lag
 	return inf.mcmc(computation,
 					CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth),

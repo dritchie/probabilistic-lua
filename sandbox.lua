@@ -165,11 +165,61 @@
 
 -------------------
 
-pr = require "probabilistic"
-util = require "util"
+pr = require("probabilistic")
+util = require("probabilistic.util")
+erp = require("probabilistic.erp")
 util.openpackage(pr)
 
 function circleOfDots()
-	--
+
+	-- helpers
+	local function norm(v)
+		return math.sqrt(v.x*v.x + v.y*v.y)
+	end
+	local function dist(p1, p2)
+		local xdiff = p1.x - p2.x
+		local ydiff = p1.y - p2.y
+		return math.sqrt(xdiff*xdiff + ydiff*ydiff)
+	end
+	local function angDP(p1, p2, p3)
+		local v1 = {p1.x - p2.x, p1.y - p2.y}
+		local v2 = {p3.x - p2.x, p3.y - p2.y}
+		return (v1.x*v2.x + v1.y*v2.y) / (norm(v1)*norm(v2))
+	end
+
+	-- params
+	local numDots = 6
+	local gmean = 0
+	local gsd = 2
+	local targetdist = 0.5
+	local distsd = 0.1
+	local targetdp = -1.0
+	local dpsd = 0.1
+
+	-- prior
+	local points = {}
+	for i=1,numDots do
+		table.insert(points, { x = gaussian(gmean, gsd), y = gaussian(gmean, gsd) })
+	end
+
+	-- distance between pairs factors
+	for i=0,numDots-1 do
+		local j = (i+1 % numDots) + 1
+		local d = dist(points[i+1], points[j])
+		factor(erp.gaussian_logprob(d, targetdist, distsd))
+	end
+
+	-- angle between triples factors
+	for i=0,numDots-1 do
+		local j = (i+1 % numDots)+1
+		local k = (i+2 % numDots)+1
+		local dp = angDP(points[i+1], points[j], points[k])
+		factor(erp.gaussian_logprob(dp, targetdp, dpsd))
+	end
+
+	return points
 end
 
+LARJMH(circleOfDots, 1000)
+--fixedStructureDriftMH(circleOfDots, {}, 0.25, 1000)
+print("done")

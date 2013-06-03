@@ -1,6 +1,4 @@
-local dirOfThisFile = (...):match("(.-)[^%.]+$")
-
-local dump = require(dirOfThisFile .. "dump")
+local dump = require("probabilistic.dump")
 
 module(..., package.seeall)
 

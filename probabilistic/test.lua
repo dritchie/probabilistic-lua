@@ -1,8 +1,6 @@
--- Must be run from /probabilistic
-
-local util = require("util")
+local util = require("probabilistic.util")
 util.openpackage(util)
-local pr = require("init")
+local pr = require("probabilistic")
 openpackage(pr)
 
 samples = 150
