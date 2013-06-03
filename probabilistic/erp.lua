@@ -1,9 +1,7 @@
 local trace = require("probabilistic.trace")
 local util = require("probabilistic.util")
 
-module(..., package.seeall)
 
--- Code for computing log probabilities should be converted to Terra functions
 
 -- Abstract base class for all ERPs
 local RandomPrimitive = {}
@@ -63,9 +61,9 @@ function FlipRandomPrimitive:logProposalProb(currval, propval, params)
 end
 
 local flipInst = FlipRandomPrimitive:new()
-function flip(p, isStructural, conditionedValue)
+function flip(p, isStructural, conditionedValue, annotation)
 	p = (p == nil) and 0.5 or p
-	return flipInst:sample({p}, isStructural, conditionedValue)
+	return flipInst:sample({p}, isStructural, conditionedValue, annotation)
 end
 
 -------------------
@@ -84,7 +82,7 @@ local function multinomial_sample(theta)
 	return result - 1
 end
 
-function multinomial_logprob(n, theta)
+local function multinomial_logprob(n, theta)
 	if n < 1 or n > table.getn(theta) then
 		return -math.huge
 	else
@@ -116,15 +114,15 @@ function MultinomialRandomPrimitive:logProposalProb(currval, propval, params)
 end
 
 local multinomialInst = MultinomialRandomPrimitive:new()
-function multinomial(theta, isStructural, conditionedValue)
-	return multinomialInst:sample(theta, isStructural, conditionedValue)
+local function multinomial(theta, isStructural, conditionedValue, annotation)
+	return multinomialInst:sample(theta, isStructural, conditionedValue, annotation)
 end
 
-function multinomialDraw(items, probs, isStructural)
+local function multinomialDraw(items, probs, isStructural)
 	return items[multinomial(probs, isStructural)]
 end
 
-function uniformDraw(items, isStructural)
+local function uniformDraw(items, isStructural)
 	local n = table.getn(items)
 	local invn = 1/n
 	local probs = {}
@@ -149,8 +147,8 @@ function UniformRandomPrimitive:logprob(val, params)
 end
 
 local uniformInst = UniformRandomPrimitive:new()
-function uniform(lo, hi, isStructural, conditionedValue)
-	return uniformInst:sample({lo, hi}, isStructural, conditionedValue)
+local function uniform(lo, hi, isStructural, conditionedValue, annotation)
+	return uniformInst:sample({lo, hi}, isStructural, conditionedValue, annotation)
 end
 
 -------------------
@@ -169,7 +167,7 @@ local function gaussian_sample(mu, sigma)
 	return mu + sigma*v/u
 end
 
-function gaussian_logprob(x, mu, sigma)
+local function gaussian_logprob(x, mu, sigma)
 	return -.5*(1.8378770664093453 + 2*math.log(sigma) + (x - mu)*(x - mu)/(sigma*sigma))
 end
 
@@ -192,8 +190,8 @@ function GaussianRandomPrimitive:logProposalProb(currval, propval, params)
 end
 
 local gaussianInst = GaussianRandomPrimitive:new()
-function gaussian(mu, sigma, isStructural, conditionedValue)
-	return gaussianInst:sample({mu, sigma}, isStructural, conditionedValue)
+local function gaussian(mu, sigma, isStructural, conditionedValue, annotation)
+	return gaussianInst:sample({mu, sigma}, isStructural, conditionedValue, annotation)
 end
 
 --------------------
@@ -231,7 +229,7 @@ local function log_gamma(xx)
 	return -tmp + math.log(2.5066282746310005*ser)
 end
 
-function gamma_logprob(x, a, b)
+local function gamma_logprob(x, a, b)
 	return (a - 1)*math.log(x) - x/b - log_gamma(a) - a*math.log(b)
 end
 
@@ -244,8 +242,8 @@ function GammaRandomPrimitive:logprob(val, params)
 end
 
 local gammaInst = GammaRandomPrimitive:new()
-function gamma(a, b, isStructural, conditionedValue)
-	return gammaInst:sample({a, b}, isStructural, conditionedValue)
+local function gamma(a, b, isStructural, conditionedValue, annotation)
+	return gammaInst:sample({a, b}, isStructural, conditionedValue, annotation)
 end
 
 -----------------------
@@ -261,7 +259,7 @@ local function log_beta(a, b)
 	return log_gamma(a) + log_gamma(b) - log_gamma(a+b)
 end
 
-function beta_logprob(x, a, b)
+local function beta_logprob(x, a, b)
 	if x > 0 and x < 1 then
 		return (a-1)*math.log(x) + (b-1)*math.log(1-x) - log_beta(a,b)
 	else
@@ -278,8 +276,8 @@ function BetaRandomPrimitive:logprob(val, params)
 end
 
 local betaInst = BetaRandomPrimitive:new()
-function beta(a, b, isStructural, conditionedValue)
-	return betaInst:sample({a, b}, isStructural, conditionedValue)
+local function beta(a, b, isStructural, conditionedValue, annotation)
+	return betaInst:sample({a, b}, isStructural, conditionedValue, annotation)
 end
 
 ------------------------
@@ -318,7 +316,7 @@ local function g(x)
 	return (1 - (x * x) + (2 * x * math.log(x))) / (d * d)
 end
 
-function binomial_logprob(s, p, n)
+local function binomial_logprob(s, p, n)
 	local inv2 = 1/2
 	local inv3 = 1/3
 	local inv6 = 1/6
@@ -346,8 +344,8 @@ function BinomialRandomPrimitive:logprob(val, params)
 end
 
 local binomialInst = BinomialRandomPrimitive:new()
-function binomial(p, n, isStructural, conditionedValue)
-	return binomialInst:sample({p, n}, isStructural, conditionedValue)
+local function binomial(p, n, isStructural, conditionedValue, annotation)
+	return binomialInst:sample({p, n}, isStructural, conditionedValue, annotation)
 end
 
 ----------------------
@@ -399,7 +397,7 @@ local function lnfact(x)
 	return ssum
 end
 
-function poisson_logprob(k, mu)
+local function poisson_logprob(k, mu)
 	return k * math.log(mu) - mu - lnfact(k)
 end
 
@@ -412,8 +410,8 @@ function PoissonRandomPrimitive:logprob(val, params)
 end
 
 local poissonInst = PoissonRandomPrimitive:new()
-function poisson(mu, isStructural, conditionedValue)
-	return poissonInst:sample({mu}, isStructural, conditionedValue)
+local function poisson(mu, isStructural, conditionedValue, annotation)
+	return poissonInst:sample({mu}, isStructural, conditionedValue, annotation)
 end
 
 ---------------------
@@ -434,7 +432,7 @@ local function dirichlet_sample(alpha)
 	return theta
 end
 
-function dirichlet_logprob(theta, alpha)
+local function dirichlet_logprob(theta, alpha)
 	local logp = log_gamma(util.sum(alpha))
 	for i=1,table.getn(alpha) do
 		logp = logp + (alpha[i] - 1)*math.log(theta[i])
@@ -452,8 +450,30 @@ function DirichletRandomPrimitive:logprob(val, params)
 end
 
 local dirichletInst = DirichletRandomPrimitive:new()
-function dirichlet(alpha, isStructural, conditionedValue)
-	return dirichletInst:sample(alpha, isStructural, conditionedValue)
+local function dirichlet(alpha, isStructural, conditionedValue, annotation)
+	return dirichletInst:sample(alpha, isStructural, conditionedValue, annotation)
 end
 
 
+-- exports
+return
+{
+	flip = flip,
+	multinomial_logprob = multinomial_logprob,
+	multinomial = multinomial,
+	multinomialDraw = multinomialDraw,
+	uniformDraw = uniformDraw,
+	uniform = uniform,
+	gaussian_logprob = gaussian_logprob,
+	gaussian = gaussian,
+	gamma_logprob = gamma_logprob,
+	gamma = gamma,
+	beta_logprob = beta_logprob,
+	beta = beta,
+	binomial_logprob = binomial_logprob,
+	binomial = binomial,
+	poisson_logprob = poisson_logprob,
+	poisson = poisson,
+	dirichlet_logprob = dirichlet_logprob,
+	dirichlet = dirichlet
+}

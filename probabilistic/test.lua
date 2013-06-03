@@ -94,9 +94,9 @@ mhtest(
 eqtest(
 	"multinomial lp",
 	{
-		erp.multinomial_logprob(1, {.2, .6, .2}),
-		erp.multinomial_logprob(2, {.2, .6, .2}),
-		erp.multinomial_logprob(3, {.2, .6, .2})
+		multinomial_logprob(1, {.2, .6, .2}),
+		multinomial_logprob(2, {.2, .6, .2}),
+		multinomial_logprob(3, {.2, .6, .2})
 	},
 	{math.log(0.2), math.log(0.6), math.log(0.2)})
 
@@ -115,9 +115,9 @@ mhtest(
 eqtest(
 	"gaussian lp",
 	{
-		erp.gaussian_logprob(0, 0.1, 0.5),
-		erp.gaussian_logprob(0.25, 0.1, 0.5),
-		erp.gaussian_logprob(0.6, 0.1, 0.5)
+		gaussian_logprob(0, 0.1, 0.5),
+		gaussian_logprob(0.25, 0.1, 0.5),
+		gaussian_logprob(0.6, 0.1, 0.5)
 	},
 	{-0.2457913526447274, -0.27079135264472737, -0.7257913526447274})
 
@@ -136,9 +136,9 @@ mhtest(
 eqtest(
 	"gamma lp",
 	{
-		erp.gamma_logprob(1, 2, 2),
-		erp.gamma_logprob(4, 2, 2),
-		erp.gamma_logprob(8, 2, 2)
+		gamma_logprob(1, 2, 2),
+		gamma_logprob(4, 2, 2),
+		gamma_logprob(8, 2, 2)
 	},
 	{-1.8862944092546166, -2.000000048134726, -3.306852867574781})
 
@@ -157,9 +157,9 @@ mhtest(
 eqtest(
 	"beta lp",
 	{
-		erp.beta_logprob(.1, 2, 5),
-		erp.beta_logprob(.2, 2, 5),
-		erp.beta_logprob(.6, 2, 5)
+		beta_logprob(.1, 2, 5),
+		beta_logprob(.2, 2, 5),
+		beta_logprob(.6, 2, 5)
 	},
 	{0.677170196389683, 0.899185234324094, -0.7747911992475776})
 
@@ -178,9 +178,9 @@ mhtest(
 eqtest(
 	"binomial lp",
 	{
-		erp.binomial_logprob(15, .5, 40),
-		erp.binomial_logprob(20, .5, 40),
-		erp.binomial_logprob(30, .5, 40)
+		binomial_logprob(15, .5, 40),
+		binomial_logprob(20, .5, 40),
+		binomial_logprob(30, .5, 40)
 	},
 	{-3.3234338674089985, -2.0722579911387817, -7.2840211276953575})
 
@@ -199,9 +199,9 @@ mhtest(
 eqtest(
 	"poisson lp",
 	{
-		erp.poisson_logprob(2, 4),
-		erp.poisson_logprob(5, 4),
-		erp.poisson_logprob(7, 4)
+		poisson_logprob(2, 4),
+		poisson_logprob(5, 4),
+		poisson_logprob(7, 4)
 	},
 	{-1.9205584583201643, -1.8560199371825927, -2.821100833226181})
 

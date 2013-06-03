@@ -1,7 +1,5 @@
 -- Taken from http://lua-users.org/wiki/DataDumper
 
-module(..., package.seeall)
-
 local dumplua_closure = [[
 local closures = {}
 local function closure(t) 
@@ -52,7 +50,7 @@ for _,lib in pairs{'_G', 'string', 'table', 'math',
   end
 end
 
-function DataDumper(value, varname, fastmode, ident)
+local function DataDumper(value, varname, fastmode, ident)
   local defined, dumplua = {}
   -- Local variables for speed optimization
   local string_format, type, string_dump, string_rep = 
@@ -206,3 +204,10 @@ function DataDumper(value, varname, fastmode, ident)
     return table.concat(items)
   end
 end
+
+
+-- exports
+return
+{
+  DataDumper = DataDumper
+}

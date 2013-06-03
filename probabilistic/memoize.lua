@@ -1,6 +1,5 @@
 local dump = require("probabilistic.dump")
 
-module(..., package.seeall)
 
 -- Wrapper around a function to memoize its results
 local MemoizedFunction = {}
@@ -26,6 +25,13 @@ function MemoizedFunction:__call(...)
 	return val 
 end
 
-function mem(func)
+local function mem(func)
 	return MemoizedFunction:new(func)
 end
+
+
+-- exports
+return
+{
+	mem = mem
+}

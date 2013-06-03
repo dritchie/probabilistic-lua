@@ -1,13 +1,11 @@
 local trace = require("probabilistic.trace")
 local util = require("probabilistic.util")
 
-module(..., package.seeall)
-
 
 -- Compute the discrete distribution over the given computation
 -- Only appropriate for computations that return a discrete value
 -- (Variadic arguments are arguments to the sampling function)
-function distrib(computation, samplingFn, ...)
+local function distrib(computation, samplingFn, ...)
 	local hist = {}
 	local samps = samplingFn(computation, ...)
 	for i,s in ipairs(samps) do
@@ -22,7 +20,7 @@ function distrib(computation, samplingFn, ...)
 end
 
 -- Compute the mean of a set of values
-function mean(values)
+local function mean(values)
 	local m = values[1]
 	local n = table.getn(values)
 	for i=2,n do
@@ -33,13 +31,13 @@ end
 
 -- Compute the expected value of a computation
 -- Only appropraite for computations whose return value is a number or overloads + and /
-function expectation(computation, samplingFn, ...)
+local function expectation(computation, samplingFn, ...)
 	local samps = samplingFn(computation, ...)
 	return mean(util.map(function(s) return s.sample end, samps))
 end
 
 -- Maximum a posteriori inference (returns the highest probability sample)
-function MAP(computation, samplingFn, ...)
+local function MAP(computation, samplingFn, ...)
 	local samps = samplingFn(computation, ...)
 	local maxelem = {sample = nil, logprob = -math.huge}
 	for i,s in ipairs(samps) do
@@ -52,7 +50,7 @@ end
 
 -- Rejection sample a result from computation that satisfies all
 -- conditioning expressions
-function rejectionSample(computation)
+local function rejectionSample(computation)
 	local tr = trace.newTrace(computation)
 	return tr.returnValue
 end
@@ -299,7 +297,7 @@ end
 
 
 -- Do MCMC for 'numsamps' iterations using a given transition kernel
-function mcmc(computation, kernel, numsamps, lag, verbose)
+local function mcmc(computation, kernel, numsamps, lag, verbose)
 	lag = (lag == nil) and 1 or lag
 	local currentTrace = trace.newTrace(computation)
 	local samps = {}
@@ -320,16 +318,30 @@ end
 -- Sample from a probabilistic computation for some
 -- number of iterations using single-variable-proposal
 -- Metropolis-Hastings 
-function traceMH(computation, numsamps, lag, verbose)
+local function traceMH(computation, numsamps, lag, verbose)
 	lag = (lag == nil) and 1 or lag
 	return mcmc(computation, RandomWalkKernel:new(), numsamps, lag, verbose)
 end
 
 -- Sample from a probabilistic computation using locally
 -- annealed reversible jump mcmc
-function LARJMH(computation, numsamps, annealSteps, jumpFreq, lag, verbose)
+local function LARJMH(computation, numsamps, annealSteps, jumpFreq, lag, verbose)
 	lag = (lag == nil) and 1 or lag
 	return mcmc(computation,
 				LARJKernel:new(RandomWalkKernel:new(false, true), annealSteps, jumpFreq),
 				numsamps, lag, verbose)
 end
+
+
+-- exports
+return
+{
+	distrib = distrib,
+	mean = mean,
+	expectation = expectation,
+	MAP = MAP,
+	rejectionSample = rejectionSample,
+	mcmc = mcmc,
+	traceMH = traceMH,
+	LARJMH = LARJMH
+}

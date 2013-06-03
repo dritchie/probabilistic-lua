@@ -1,7 +1,5 @@
 local util = require("probabilistic.util")
 
-module(..., package.seeall)
-
 
 -----------------------------------------------------------
 --  Intermediate representation - Arithmetic expressions --
@@ -463,16 +461,16 @@ addWrappedBinaryFuncs(irmath, {
 -- Toggling mathtracing mode --
 local gmath = nil
 local _on = false
-function on()
+local function on()
 	_on = true
 	gmath = math
 	_G["math"] = irmath
 end
-function off()
+local function off()
 	_on = false
 	_G["math"] = gmath
 end
-function isOn()
+local function isOn()
 	return _on
 end
 
@@ -480,22 +478,35 @@ end
 -- What's the fundamental number type we're using?
 -- Can be "double" or "stan::agrad::var"
 local numtype = "double"
-function numberType()
+local function numberType()
 	return numtype
 end
-function setNumberType(newnumtype)
+local function setNumberType(newnumtype)
 	numtype = newnumtype
 end
 
 
 -- Client code needs to be able to create free variables
-function makeVar(name, type)
+local function makeVar(name, type)
 	return IRVarNode:new(name, type)
 end
 -- ...and for the time being, create functions
-function makeFunction(name, rettype, args, bodylist)
+local function makeFunction(name, rettype, args, bodylist)
 	return IRFunctionDefinition:new(name, rettype, args, bodylist)
 end
+
+
+-- exports
+return
+{
+	on = on,
+	off = off,
+	isOn = isOn,
+	numberType = numberType,
+	setNumberType = setNumberType,
+	makeVar = makeVar,
+	makeFunction = makeFunction
+}
 
 
 

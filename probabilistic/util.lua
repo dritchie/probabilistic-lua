@@ -1,10 +1,10 @@
 
-module(..., package.seeall)
+local M = {}
 
 
 -- map(function, table)
 -- e.g: map(double, {1,2,3})    -> {2,4,6}
-function map(func, tbl)
+function M.map(func, tbl)
 	local newtbl = {}
 	for i,v in pairs(tbl) do
 		newtbl[i] = func(v)
@@ -14,7 +14,7 @@ end
 
 -- filter(function, table)
 -- e.g: filter(is_even, {1,2,3,4}) -> {2,4}
-function filter(func, tbl)
+function M.filter(func, tbl)
 	local newtbl= {}
 	for i,v in pairs(tbl) do
 		if func(v) then
@@ -24,7 +24,7 @@ function filter(func, tbl)
 	return newtbl
 end
 
-function keys(tab)
+function M.keys(tab)
 	local newtbl = {}
 	for k,v in pairs(tab) do
 		table.insert(newtbl, k)
@@ -32,7 +32,7 @@ function keys(tab)
 	return newtbl
 end
 
-function sum(tab)
+function M.sum(tab)
 	local s = 0
 	for k,v in pairs(tab) do
 		s = s + v
@@ -40,7 +40,7 @@ function sum(tab)
 	return s
 end
 
-function arrayequals(a1, a2)
+function M.arrayequals(a1, a2)
 	if table.getn(a1) ~= table.getn(a2) then
 		return false
 	else
@@ -53,11 +53,11 @@ function arrayequals(a1, a2)
 	end
 end
 
-function cleartable(tab)
+function M.cleartable(tab)
 	for k,v in pairs(tab) do tab[k]=nil end
 end
 
-function copytable(tab)
+function M.copytable(tab)
 	newtbl = {}
 	for k,v in pairs(tab) do
 		newtbl[k] = v
@@ -65,13 +65,13 @@ function copytable(tab)
 	return newtbl
 end
 
-function copytablemembers(srctab, dsttab)
+function M.copytablemembers(srctab, dsttab)
 	for k,v in pairs(srctab) do
 		dsttab[k] = v
 	end
 end
 
-function randomChoice(tbl)
+function M.randomChoice(tbl)
 	local n = table.getn(tbl)
 	if n > 0 then
 		return tbl[math.random(n)]
@@ -80,16 +80,20 @@ function randomChoice(tbl)
 	end
 end
 
-function bool2int(b)
+function M.bool2int(b)
 	return b and 1 or 0
 end
 
-function int2bool(i)
+function M.int2bool(i)
 	return i ~= 0
 end
 
-function openpackage(ns)
+function M.openpackage(ns)
 	for n,v in pairs(ns) do
 		_G[n] = v
 	end
 end
+
+
+-- exports
+return M
