@@ -62,7 +62,7 @@ end
 
 -- MCMC transition kernel that takes random walks by tweaking a
 -- single variable at a time
-RandomWalkKernel = {}
+local RandomWalkKernel = {}
 
 function RandomWalkKernel:new(structural, nonstructural)
 	structural = (structural == nil) and true or structural
@@ -185,7 +185,7 @@ end
 
 
 -- MCMC transition kernel that does reversible jumps using the LARJ algorithm
-LARJKernel = {}
+local LARJKernel = {}
 
 function LARJKernel:new(diffusionKernel, annealSteps, jumpFreq)
 	local newobj = {

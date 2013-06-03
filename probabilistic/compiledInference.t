@@ -1,16 +1,12 @@
-local dirOfThisFile = (...):match("(.-)[^%.]+$")
-
-local util = require(dirOfThisFile .. "util")
-local mt = require(dirOfThisFile .. "mathtracing")
-local inf = require(dirOfThisFile .. "inference")
-
-module(..., package.seeall)
+local util = require("util")
+local mt = require("mathtracing")
+local inf = require("inference")
 
 
 -- An MCMC kernel that performs fixed-structure gaussian drift
 -- by JIT-compiling all proposal/probability calculations
 -- into machine code
-CompiledGaussianDriftKernel = {}
+local CompiledGaussianDriftKernel = {}
 
 -- 'bandwidthMap' stores a map from type identifiers to gaussian drift bandwidths
 -- The type identifers are assumed to be used in the ERP 'annotation' fields
@@ -35,6 +31,7 @@ function CompiledGaussianDriftKernel:next(currTrace)
 	-- Check for structure change/need recompile
 	if self:needsRecompile(currTrace) then
 		self:compile(currTrace)
+	end
 
 	-- Get the nonstructurals, extract their values and bandwidths
 	local nonStructVars = currTrace.freeVarNames(false, true)
@@ -68,6 +65,7 @@ end
 function CompiledGaussianDriftKernel:needsRecompile(currTrace)
 	if not self.compiledLogProbFn then
 		return true
+	end
 	-- Check if every variable from the current
 	-- trace is in our last-encountered structure and vice-versa
 	local svarnames = currTrace.freeVarNames(true, false)
@@ -109,7 +107,7 @@ end
 local cmath = terralib.includec("math.h")
 local cstdlib = terralib.includecstring [[
 	#include <stdlib.h>
-	double random() { return (double)(rand()) / RAND_MAX }
+	double random() { return (double)(rand()) / RAND_MAX; }
 ]]
 local terra gaussian_sample(mu : double, sigma: double) : double
 	var u : double
@@ -147,6 +145,7 @@ terra CompiledGaussianDriftKernel.step(numVars : int, vals : &double, bandwidths
 	else
 		vals[i] = v
 		return currLP, false
+	end
 end
 
 function CompiledGaussianDriftKernel:stats()
@@ -163,3 +162,10 @@ function fixedStructureDriftMH(computation, bandwidthMap, defaultBandwidth, nums
 					CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth),
 					numsamps, lag, verbose)
 end
+
+
+-- Module exports
+return
+{
+	fixedStructureDriftMH = fixedStructureDriftMH	
+}

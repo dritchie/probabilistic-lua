@@ -3,7 +3,7 @@ local dirOfThisFile = (...):match("(.-)[^%.]+$")
 local trace = require(dirOfThisFile .. "trace")
 local erp = require(dirOfThisFile .. "erp")
 local inference = require(dirOfThisFile .. "inference")
-local cinference = reuquire(dirOfThisFile .. "compiledInference")
+local cinference = terralib.require(dirOfThisFile .. "compiledInference")
 local control = require(dirOfThisFile .. "control")
 local memoize = require(dirOfThisFile .. "memoize")
 
