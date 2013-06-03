@@ -49,6 +49,7 @@ function CompiledGaussianDriftKernel:next(currTrace)
 		CompiledGaussianDriftKernel.step(numVars, valArray, bwArray, currTrace.logprob,
 			self.compiledLogProbFn.definitions[1]:getpointer())
 	self.proposalsMade = self.proposalsMade + 1
+	accepted = util.int2bool(accepted)
 	if accepted then
 		self.proposalsAccepted = self.proposalsAccepted + 1
 	end
@@ -107,7 +108,8 @@ end
 local cmath = terralib.includec("math.h")
 local cstdlib = terralib.includecstring [[
 	#include <stdlib.h>
-	double random() { return (double)(rand()) / RAND_MAX; }
+	#define FLT_RAND_MAX 0.999999
+	double random() { return ((double)(rand()) / RAND_MAX)*FLT_RAND_MAX; }
 ]]
 local terra gaussian_sample(mu : double, sigma: double) : double
 	var u : double
@@ -125,13 +127,15 @@ local terra gaussian_sample(mu : double, sigma: double) : double
 	return mu + sigma*v/u
 end
 
+local cstdio = terralib.includec("stdio.h")
+
 -- Performs the MH step by perturbing a randomly-selected variable
 -- Returns the new log probability
 -- Also returns true if the proposal was accepted 
 terra CompiledGaussianDriftKernel.step(numVars : int, vals : &double, bandwidths: &double,
 									   currLP: double, lpfn: {&double} -> {double}) : {double, bool}
 	-- Pick a random variable
-	var i = [int](cstdlib.random() / numVars)
+	var i = [int](cstdlib.random() * numVars)
 	var v = vals[i]
 
 	-- Perturb
@@ -140,7 +144,7 @@ terra CompiledGaussianDriftKernel.step(numVars : int, vals : &double, bandwidths
 
 	-- Accept/reject
 	var newLP = lpfn(vals)
-	if cstdlib.random() > newLP / currLP then
+	if cmath.log(cstdlib.random()) < newLP - currLP then
 		return newLP, true
 	else
 		vals[i] = v

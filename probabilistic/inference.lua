@@ -303,6 +303,7 @@ local function mcmc(computation, kernel, numsamps, lag, verbose)
 	local samps = {}
 	local iters = numsamps * lag
 	for i=1,iters do
+		--if i%10 == 0 then print(i) end
 		currentTrace = kernel:next(currentTrace)
 		if i % lag == 0 then
 			table.insert(samps, {sample = currentTrace.returnValue, logprob = currentTrace.logprob})
