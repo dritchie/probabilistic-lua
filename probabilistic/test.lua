@@ -1,5 +1,3 @@
-jit.off()
-
 local util = require("probabilistic.util")
 util.openpackage(util)
 local pr = require("probabilistic")
