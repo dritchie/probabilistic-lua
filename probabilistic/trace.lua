@@ -108,7 +108,6 @@ local trace = nil
 
 -- Run computation and update this trace accordingly
 function RandomExecutionTrace:traceUpdate(structureIsFixed)
-
 	local origtrace = trace
 	trace = self
 
@@ -242,10 +241,22 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 		record.annotation = annotation
 		record.conditioned = (conditionedValue ~= nil)
 		local hasChanges = false
+
+		-- If we're in mathtracing mode and this is a nonstructural variable,
+		-- then we want to recompute the log prob for a var node
+		if mt.isOn() and not isStructural then
+			record.__val = record.val
+			-- (currVarIndex - 1) because Terra and C use 0-based-indexing
+			record.val = mt.makeVar(string.format("vars[%d]", self.currVarIndex-1), mt.numberType(), true)
+			hasChanges = true
+		end
+
+		-- If params have changed, we need to recompute log prob
 		if not util.arrayequals(record.params, params) then
 			record.params = params
 			hasChanges = true
 		end
+		-- If the conditioned value has changed, we also need to recompute log prob
 		if conditionedValue and conditionedValue ~= record.val then
 			record.val = conditionedValue
 			record.conditioned = true
@@ -255,7 +266,8 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 			record.logprob = erp:logprob(record.val, params)
 		end
 	end
-	-- Finish up and return
+
+	-- Final bookkeeping
 	if not varIsInFlatList then
 		table.insert(self.varlist, record)
 	end
@@ -263,14 +275,13 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 	self.logprob = self.logprob + record.logprob
 	record.active = true
 
-	-- If we are in mathtracing mode and this is a nonstructural variable,
-	-- we should actually return a free variable IR node corresponding to this
-	-- variable
+	-- If we're in mathtracing mode, we need to restore the original value
 	if mt.isOn() and not isStructural then
-		return mt.makeVar(string.format("vars[%d]", self.currVarIndex-1), mt.numberType(), true)
-	else
-		return record.val
+		record.val = record.__val
 	end
+
+	return record.val
+
 end
 
 -- Simply retrieve the variable record associated with 'name'

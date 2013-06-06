@@ -10,20 +10,32 @@ local CompiledTraceState =
 	{
 		returnValue =
 		function(self)
-			local nonStructNames = self.trace:freeVarNames(false, true)
-			for i,n in ipairs(nonStructNames) do
-				self.trace:getRecord(n).val = self.varVals[i-1]
+			if not self.retval then
+				local nonStructNames = self.trace:freeVarNames(false, true)
+				for i,n in ipairs(nonStructNames) do
+					self.trace:getRecord(n).val = self.varVals[i-1]
+				end
+				-- TODO: denote that we're not accumulating probabilities or evaluating factors here?
+				self.trace:traceUpdate(true)
+				self.retval = self.trace.returnValue
 			end
-			-- TODO: denote that we're not accumulating probabilities or evaluating factors here?
-			self.trace:traceUpdate(true)
-			return self.trace.returnValue
+			return self.retval
 		end
 	}
 }
 
 function CompiledTraceState:__index(key)
 	local v = CompiledTraceState[key]
-	return v ~= nil and v or CompiledTraceState.properties[key](self)
+	if v ~= nil then
+		return v
+	else
+		local propfn = CompiledTraceState.properties[key]
+		if propfn then
+			return propfn(self)
+		else
+			return nil
+		end
+	end
 end
 
 function CompiledTraceState:new(trace, other)
@@ -38,7 +50,7 @@ function CompiledTraceState:new(trace, other)
 		}
 	else
 		local nonStructNames = trace:freeVarNames(false, true)
-		local numNonStruct = table.getn(trace:freeVarNames(false, true))
+		local numNonStruct = table.getn(nonStructNames)
 		newobj = 
 		{
 			trace = trace,
@@ -47,8 +59,8 @@ function CompiledTraceState:new(trace, other)
 			varVals = terralib.new(double[numNonStruct])
 		}
 		for i,n in ipairs(nonStructNames) do
-			local rec = trace.getRecord(n)
-			varVals[i-1] = rec.val
+			local rec = trace:getRecord(n)
+			newobj.varVals[i-1] = rec.val
 		end
 	end
 	setmetatable(newobj, self)
@@ -113,14 +125,12 @@ function CompiledGaussianDriftKernel:releaseControl(currState)
 	newTrace.logprob = currState.logprob
 	local nonStructVars = newTrace:freeVarNames(false, true)
 	for i,n in ipairs(nonStructVars) do
-		newTrace.getRecord(n).val = currState.varVals[i-1]
+		newTrace:getRecord(n).val = currState.varVals[i-1]
 	end
 	return newTrace
 end
 
 function CompiledGaussianDriftKernel:next(currState)
-
-	-- Create a new state and call the step function
 	local newState = CompiledTraceState:new(currState.trace, currState)
 	local newlp, accepted =
 		CompiledGaussianDriftKernel.step(newState.numVars, newState.varVals, self.varBandWidths, currState.logprob,
@@ -131,7 +141,6 @@ function CompiledGaussianDriftKernel:next(currState)
 	if accepted then
 		self.proposalsAccepted = self.proposalsAccepted + 1
 	end
-
 	return newState
 end
 
@@ -169,12 +178,14 @@ function CompiledGaussianDriftKernel:compile(currTrace)
 	mt.off()
 	local nonStructVars = currTrace:freeVarNames(false, true)
 	local argArray = mt.makeVar("vars", "double*")
-	local fn = mt.makeFunction("logprob", "double", {argArray}, {currTrace.logprob})
+	local fnname = string.format("logprob%s", tostring(symbol()))
+	local fn = mt.makeFunction(fnname, "double", {argArray}, {currTrace.logprob})
 	local C = terralib.includecstring(
 		string.format("#include <math.h>\n\n%s", fn:emitCode()))
-	self.compiledLogProbFn = C.logprob
+	self.compiledLogProbFn = C[fnname]
 	currTrace.logprob = savedLP
 end
+
 
 -- Terra version of erp.lua's "gaussian_sample"
 local cmath = terralib.includec("math.h")
@@ -198,6 +209,8 @@ local terra gaussian_sample(mu : double, sigma: double) : double
 	until not(q >= 0.27597 and (q > 0.27846 or v*v > -4 * u * u * cmath.log(u)))
 	return mu + sigma*v/u
 end
+
+--local cstdio = terralib.includec("stdio.h")
 
 -- Performs the MH step by perturbing a randomly-selected variable
 -- Returns the new log probability
@@ -230,7 +243,7 @@ end
 
 -- Sample from a fixed-structure probabilistic computation for some
 -- number of iterations using compiled Gaussian drift MH
-local function fixedStructureDriftMH(computation, bandwidthMap, defaultBandwidth, numsamps, lag, verbose)
+local function fixedStructureDriftMH(computation, numsamps, bandwidthMap, defaultBandwidth, lag, verbose)
 	lag = (lag == nil) and 1 or lag
 	return inf.mcmc(computation,
 					CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth),

@@ -221,7 +221,7 @@ local IRReturnStatement = {}
 function IRReturnStatement:new(exp)
 	local newobj = 
 	{
-		exp = exp
+		exp = IRNode.nodify(exp)
 	}
 	setmetatable(newobj, self)
 	self.__index = self
