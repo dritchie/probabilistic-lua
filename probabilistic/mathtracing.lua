@@ -166,9 +166,10 @@ end
 -- or intermediates created during CSE
 local IRVarNode = IRNode:new()
 
-function IRVarNode:new(name, type)
+function IRVarNode:new(name, type, isRandomVariable)
 	local newobj = IRNode.new(self, name)
 	newobj.type = type
+	newobj.isRandomVariable = isRandomVariable
 	return newobj
 end
 
@@ -487,8 +488,8 @@ end
 
 
 -- Client code needs to be able to create free variables
-local function makeVar(name, type)
-	return IRVarNode:new(name, type)
+local function makeVar(name, type, isRandomVariable)
+	return IRVarNode:new(name, type, isRandomVariable)
 end
 -- ...and for the time being, create functions
 local function makeFunction(name, rettype, args, bodylist)

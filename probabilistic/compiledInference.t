@@ -3,6 +3,59 @@ local mt = require("probabilistic.mathtracing")
 local inf = require("probabilistic.inference")
 
 
+-- Internal sampler state for compiled kernels
+local CompiledTraceState = 
+{
+	properties = 
+	{
+		returnValue =
+		function(self)
+			local nonStructNames = self.trace:freeVarNames(false, true)
+			for i,n in ipairs(nonStructNames) do
+				self.trace:getRecord(n).val = self.varVals[i-1]
+			end
+			-- TODO: denote that we're not accumulating probabilities or evaluating factors here?
+			self.trace:traceUpdate(true)
+			return self.trace.returnValue
+		end
+	}
+}
+
+function CompiledTraceState:__index(key)
+	local v = CompiledTraceState[key]
+	return v ~= nil and v or CompiledTraceState.properties[key](self)
+end
+
+function CompiledTraceState:new(trace, other)
+	local newobj = nil
+	if other then
+		newobj = 
+		{
+			trace = trace,
+			logprob = other.logprob,
+			numVars = other.numVars,
+			varVals = terralib.new(double[other.numVars], other.varVals)
+		}
+	else
+		local nonStructNames = trace:freeVarNames(false, true)
+		local numNonStruct = table.getn(trace:freeVarNames(false, true))
+		newobj = 
+		{
+			trace = trace,
+			logprob = trace.logprob,
+			numVars = numNonStruct,
+			varVals = terralib.new(double[numNonStruct])
+		}
+		for i,n in ipairs(nonStructNames) do
+			local rec = trace.getRecord(n)
+			varVals[i-1] = rec.val
+		end
+	end
+	setmetatable(newobj, self)
+	return newobj
+end
+
+
 -- An MCMC kernel that performs fixed-structure gaussian drift
 -- by JIT-compiling all proposal/probability calculations
 -- into machine code
@@ -19,48 +72,67 @@ function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth)
 		proposalsMade = 0,
 		proposalsAccepted = 0,
 		structuralVars = {},
-		compiledLogProbFn = nil
+		compiledLogProbFn = nil,
+		varBandWidths = nil
 	}
 	setmetatable(newobj, self)
 	self.__index = self
 	return newobj
 end
 
-function CompiledGaussianDriftKernel:next(currTrace)
-	
+function CompiledGaussianDriftKernel:usesMathtracing()
+	return true
+end
+
+function CompiledGaussianDriftKernel:assumeControl(currTrace)
+	-- Translate trace into internal state
+	local currState = CompiledTraceState:new(currTrace)
+
 	-- Check for structure change/need recompile
+	-- TODO: Implement caching of compiled traces?
 	if self:needsRecompile(currTrace) then
 		self:compile(currTrace)
 	end
 
-	-- Get the nonstructurals, extract their values and bandwidths
+	-- Get the proposal bandwidth of each nonstructural
 	local nonStructVars = currTrace:freeVarNames(false, true)
-	local numVars = table.getn(nonStructVars)
-	local valArray = terralib.new(double[numVars])
-	local bwArray = terralib.new(double[numVars])
+	self.varBandWidths = terralib.new(double[currState.numVars])
 	for i,n in ipairs(nonStructVars) do
 		local rec = currTrace:getRecord(n)
-		valArray[i-1] = rec.val
-		bwArray[i-1] = self.bandwidthMap[rec.annotation] or self.defaultBandwidth
+		self.varBandWidths[i-1] = self.bandwidthMap[rec.annotation] or self.defaultBandwidth
 	end
 
-	-- Call the step function
+	return currState
+end
+
+function CompiledGaussianDriftKernel:releaseControl(currState)
+	-- Make a new copy of the trace, since we might be modifying it
+	local newTrace = currState.trace:deepcopy()
+
+	-- Copy the var values and logprob back into the trace
+	newTrace.logprob = currState.logprob
+	local nonStructVars = newTrace:freeVarNames(false, true)
+	for i,n in ipairs(nonStructVars) do
+		newTrace.getRecord(n).val = currState.varVals[i-1]
+	end
+	return newTrace
+end
+
+function CompiledGaussianDriftKernel:next(currState)
+
+	-- Create a new state and call the step function
+	local newState = CompiledTraceState:new(currState.trace, currState)
 	local newlp, accepted =
-		CompiledGaussianDriftKernel.step(numVars, valArray, bwArray, currTrace.logprob,
+		CompiledGaussianDriftKernel.step(newState.numVars, newState.varVals, self.varBandWidths, currState.logprob,
 			self.compiledLogProbFn.definitions[1]:getpointer())
+	newState.logprob = newlp
 	self.proposalsMade = self.proposalsMade + 1
 	accepted = util.int2bool(accepted)
 	if accepted then
 		self.proposalsAccepted = self.proposalsAccepted + 1
 	end
 
-	-- Copy values back into the trace
-	for i=1,numVars do
-		currTrace:getRecord(nonStructVars[i]).val = valArray[i-1]
-	end
-	currTrace.logprob = newlp
-
-	return currTrace
+	return newState
 end
 
 function CompiledGaussianDriftKernel:needsRecompile(currTrace)
@@ -126,8 +198,6 @@ local terra gaussian_sample(mu : double, sigma: double) : double
 	until not(q >= 0.27597 and (q > 0.27846 or v*v > -4 * u * u * cmath.log(u)))
 	return mu + sigma*v/u
 end
-
-local cstdio = terralib.includec("stdio.h")
 
 -- Performs the MH step by perturbing a randomly-selected variable
 -- Returns the new log probability

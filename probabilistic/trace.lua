@@ -267,7 +267,7 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 	-- we should actually return a free variable IR node corresponding to this
 	-- variable
 	if mt.isOn() and not isStructural then
-		return mt.makeVar(string.format("vars[%d]", self.currVarIndex-1), mt.numberType())
+		return mt.makeVar(string.format("vars[%d]", self.currVarIndex-1), mt.numberType(), true)
 	else
 		return record.val
 	end

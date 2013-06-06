@@ -1,3 +1,5 @@
+jit.off()
+
 local util = require("probabilistic.util")
 util.openpackage(util)
 local pr = require("probabilistic")
@@ -359,8 +361,8 @@ mhtest(
 	"memoized flip with random argument, unconditioned",
 	function()
 		local proc = mem(function(x) return int2bool(flip(0.8)) end)
-		local p1 = proc(uniformDraw({1,2,3}))
-		local p2 = proc(uniformDraw({1,2,3}))
+		local p1 = proc(uniformDraw({1,2,3}, true))
+		local p2 = proc(uniformDraw({1,2,3}, true))
 		return bool2int(p1 and p2)
 	end,
 	0.6933333333333334)
