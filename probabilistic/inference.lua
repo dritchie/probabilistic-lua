@@ -91,14 +91,15 @@ function RandomWalkKernel:next(currTrace)
 	-- and generate another sample (this may not actually be deterministic,
 	-- in the case of nested query)
 	if not name then
-		currTrace:traceUpdate(not self.structural)
-		return currTrace
+		local newTrace = currTrace:deepcopy()
+		newTrace:traceUpdate(not self.structural)
+		return newTrace
 	-- Otherwise, make a proposal for a randomly-chosen variable, probabilistically
 	-- accept it
 	else
 		local nextTrace, fwdPropLP, rvsPropLP = currTrace:proposeChange(name, not self.structural)
 		fwdPropLP = fwdPropLP - math.log(table.getn(currTrace:freeVarNames(self.structural, self.nonstructural)))
-		rvsPropLP = rvsPropLP - math.log(table.getn(currTrace:freeVarNames(self.structural, self.nonstructural)))
+		rvsPropLP = rvsPropLP - math.log(table.getn(nextTrace:freeVarNames(self.structural, self.nonstructural)))
 		local acceptThresh = nextTrace.logprob - currTrace.logprob + rvsPropLP - fwdPropLP
 		if nextTrace.conditionsSatisfied and math.log(math.random()) < acceptThresh then
 			self.proposalsAccepted = self.proposalsAccepted + 1
@@ -248,8 +249,9 @@ function LARJKernel:next(currState)
 		-- and generate another sample (this may not actually be deterministic,
 		-- in the case of nested query)
 		if self.currentNumStruct + self.currentNumNonStruct == 0 then
-			currState:traceUpdate()
-			return currState
+			local newTrace = currState:deepcopy()
+			newTrace:traceUpdate()
+			return newTrace
 		end
 	end
 	-- Decide whether to jump or diffuse
