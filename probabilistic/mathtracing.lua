@@ -1,6 +1,30 @@
 local util = require("probabilistic.util")
 
 
+-------------------------------
+--  Terra/C type conversions --
+-------------------------------
+
+local terra2c = 
+{
+	int8 = "char",
+	int16 = "short",
+	int32 = "int",
+	int64 = "long long",
+	uint = "unsigned int",
+	uint8 = "unsigned char",
+	uint16 = "unsigned short",
+	uint32 = "unsigned int",
+	uint64 = "unsigned long long"
+}
+
+local function terraTypeToCType(type)
+	local typestr = tostring(type)
+	local trans = terra2c[typestr]
+	return trans or typestr
+end
+
+
 -----------------------------------------------------------
 --  Intermediate representation - Arithmetic expressions --
 -----------------------------------------------------------
@@ -16,6 +40,10 @@ function IRNode:new(name)
 	setmetatable(newobj, self)
 	self.__index = self
 	return newobj
+end
+
+function IRNode:childNodes()
+	return self.inputs
 end
 
 
@@ -148,9 +176,9 @@ function IRBinaryPrimFuncNode:emitCode()
 		self.name, self.inputs[1]:emitCode(), self.inputs[2]:emitCode())
 end
 
-local IRCppFuncNode = IRNode:new()
+local IRCompiledFuncNode = IRNode:new()
 
-function IRCppFuncNode:new(name, arglist)
+function IRCompiledFuncNode:new(name, arglist)
 	local newobj = IRNode.new(self, name)
 	for i,a in ipairs(arglist) do
 		arglist[i] = IRNode.nodify(a)
@@ -159,7 +187,7 @@ function IRCppFuncNode:new(name, arglist)
 	return newobj
 end
 
--- TODO: Define __tostring and emitCode for IRCppFuncNode??
+-- TODO: Define __tostring and emitCode for IRCompiledFuncNode??
 
 
 -- These refer to variables that are either inputs to the overall trace function
@@ -167,6 +195,7 @@ end
 local IRVarNode = IRNode:new()
 
 function IRVarNode:new(name, type, isRandomVariable)
+	assert(isRandomVariable ~= nil)
 	local newobj = IRNode.new(self, name)
 	newobj.type = type
 	newobj.isRandomVariable = isRandomVariable
@@ -174,7 +203,7 @@ function IRVarNode:new(name, type, isRandomVariable)
 end
 
 function IRVarNode:__tostring(tablevel)
-	return tabify(string.format("IRVarNode: %s %s", self.type, self.name), tablevel)
+	return tabify(string.format("IRVarNode: %s %s", tostring(self.type), self.name), tablevel)
 end
 
 function IRVarNode:emitCode()
@@ -204,14 +233,18 @@ function IRVarDefinition:new(lhs, rhs, type)
 	return newobj
 end
 
+function IRVarDefinition:childNodes()
+	return {lhs, rhs}
+end
+
 function IRVarDefinition:__tostring(tablevel)
 	tablevel = tablevel or 0
 	return tabify(string.format("IRVarDefinition: %s %s\n%s",
-		self.type, self.lhs, self.rhs:__tostring(tablevel+1)), tablevel)
+		tostring(self.type), self.lhs, self.rhs:__tostring(tablevel+1)), tablevel)
 end
 
 function IRVarDefinition:emitCode()
-	return string.format("%s %s = (%s);", self.type, self.lhs:emitCode(), self.rhs:emitCode())
+	return string.format("%s %s = (%s);", terraTypeToCType(self.type), self.lhs:emitCode(), self.rhs:emitCode())
 end
 
 
@@ -226,6 +259,10 @@ function IRReturnStatement:new(exp)
 	setmetatable(newobj, self)
 	self.__index = self
 	return newobj
+end
+
+function IRReturnStatement:childNodes()
+	return {exp}
 end
 
 function IRReturnStatement:__tostring(tablevel)
@@ -259,10 +296,14 @@ function IRFunctionDefinition:new(name, rettype, args, bodylist)
 	return newobj
 end
 
+function IRFunctionDefinition:childNodes()
+	return util.joinarrays(args, bodylist)
+end
+
 function IRFunctionDefinition:__tostring(tablevel)
 	tablevel = tablevel or 0
 	local str = tabify(string.format("IRFunctionDefinition: %s %s\n",
-		self.type, self.name), tablevel)
+		tostring(self.type), self.name), tablevel)
 	str = str .. tabify("args:\n", tablevel+1)
 	for i,a in ipairs(self.args) do
 		str = str .. string.format("%s\n", a:__tostring(tablevel+2))
@@ -276,7 +317,7 @@ function IRFunctionDefinition:__tostring(tablevel)
 end
 
 function IRFunctionDefinition:emitCode()
-	local str = string.format("%s %s(", self.rettype, self.name)
+	local str = string.format("%s %s(", terraTypeToCType(self.rettype), self.name)
 	local numargs = table.getn(self.args)
 	for i,a in ipairs(self.args) do
 		local postfix = i == numargs and "" or ", "
@@ -413,7 +454,7 @@ util.copytablemembers(operators, IRUnaryOpNode)
 util.copytablemembers(operators, IRBinaryOpNode)
 util.copytablemembers(operators, IRUnaryPrimFuncNode)
 util.copytablemembers(operators, IRBinaryPrimFuncNode)
-util.copytablemembers(operators, IRCppFuncNode)
+util.copytablemembers(operators, IRCompiledFuncNode)
 
 -- Math functions --
 local irmath = 
@@ -477,8 +518,7 @@ end
 
 
 -- What's the fundamental number type we're using?
--- Can be "double" or "stan::agrad::var"
-local numtype = "double"
+local numtype = nil
 local function numberType()
 	return numtype
 end
@@ -497,6 +537,20 @@ local function makeFunction(name, rettype, args, bodylist)
 end
 
 
+function IRTraverse(rootNode, visitor)
+	local fringe = {rootNode}
+	local visited = {}
+	while table.getn(fringe) > 0 do
+		local top = table.remove(fringe)
+		if not visited[top] then
+			visited[top] = true
+			visitor(top)
+			util.appendarray(fringe, top:childNodes())
+		end
+	end
+end
+
+
 -- exports
 return
 {
@@ -506,7 +560,8 @@ return
 	numberType = numberType,
 	setNumberType = setNumberType,
 	makeVar = makeVar,
-	makeFunction = makeFunction
+	makeFunction = makeFunction,
+	IRTraverse = IRTraverse
 }
 
 

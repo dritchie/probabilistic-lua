@@ -71,6 +71,20 @@ function M.copytablemembers(srctab, dsttab)
 	end
 end
 
+function M.joinarrays(t1, t2)
+	local res = M.copytable(t1)
+	for i,v in ipairs(t2) do
+		table.insert(res, v)
+	end
+	return res
+end
+
+function M.appendarray(srcarr, dstarr)
+	for i,v in ipairs(srcarr) do
+		table.insert(dstarr, v)
+	end
+end
+
 function M.randomChoice(tbl)
 	local n = table.getn(tbl)
 	if n > 0 then
