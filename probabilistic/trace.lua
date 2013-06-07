@@ -162,7 +162,7 @@ end
 -- forward and reverse probabilities of this proposal
 function RandomExecutionTrace:proposeChange(varname, structureIsFixed)
 	local nextTrace = self:deepcopy()
-	local var = nextTrace:getRecord(varname)
+	local var = nextTrace.vars[varname]
 	local propval = var.erp:proposal(var.val, var.params)
 	local fwdPropLP = var.erp:logProposalProb(var.val, propval, var.params)
 	local rvsPropLP = var.erp:logProposalProb(propval, var.val, var.params)
@@ -299,12 +299,6 @@ end
 -- associated with the name 'name'
 function RandomExecutionTrace:setVarProp(name, prop, val)
 	self.vars[name][prop] = val
-end
-
--- Simply retrieve the variable record associated with 'name'
--- (Not intended to be used by client code...)
-function RandomExecutionTrace:getRecord(name)
-	return self.vars[name]
 end
 
 -- Add a new factor into the log-likelihood of this trace

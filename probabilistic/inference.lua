@@ -169,11 +169,11 @@ function LARJInterpolationTrace:hasVar(name)
 end
 
 function LARJInterpolationTrace:getVarProp(name, prop)
-	local var1 = self.trace1:getRecord(name)
+	local var1 = self.trace1.vars[name]
 	if var1 then
 		return var1[prop]
 	else
-		local var2 = self.trace2:getRecord(name)
+		local var2 = self.trace2.vars[name]
 		if var2 then
 			return var2[prop]
 		else
@@ -183,8 +183,8 @@ function LARJInterpolationTrace:getVarProp(name, prop)
 end
 
 function LARJInterpolationTrace:setVarProp(name, prop, val)
-	local var1 = self.trace1:getRecord(name)
-	local var2 = self.trace2:getRecord(name)
+	local var1 = self.trace1.vars[name]
+	local var2 = self.trace2.vars[name]
 	if var1 then
 		var1[prop] = val
 	end
@@ -204,13 +204,13 @@ end
 
 function LARJInterpolationTrace:proposeChange(varname, structureIsFixed)
 	assert(structureIsFixed)
-	local var1 = self.trace1:getRecord(varname)
-	local var2 = self.trace2:getRecord(varname)
+	local var1 = self.trace1.vars[varname]
+	local var2 = self.trace2.vars[varname]
 	local nextTrace = LARJInterpolationTrace:new(var1 and self.trace1:deepcopy() or self.trace1,
 												 var2 and self.trace2:deepcopy() or self.trace2,
 												 self.alpha, self.annealingKernel)
-	var1 = nextTrace.trace1:getRecord(varname)
-	var2 = nextTrace.trace2:getRecord(varname)
+	var1 = nextTrace.trace1.vars[varname]
+	var2 = nextTrace.trace2.vars[varname]
 	local var = var1 or var2
 	assert(not var.structural) 	-- We're only suposed to be making changes to non-structurals here
 	local propval = var.erp:proposal(var.val, var.params)
@@ -316,7 +316,7 @@ function LARJKernel:jumpStep(currTrace)
 	-- Randomly choose a structural variable to change
 	local structVars = newStructTrace:freeVarNames(true, false)
 	local name = util.randomChoice(structVars)
-	local var = newStructTrace:getRecord(name)
+	local var = newStructTrace.vars[name]
 	local origval = var.val
 	local propval = var.erp:proposal(var.val, var.params)
 	local fwdPropLP = var.erp:logProposalProb(var.val, propval, var.params)
@@ -356,7 +356,7 @@ function LARJKernel:jumpStep(currTrace)
 	end
 
 	-- Finalize accept/reject decision
-	var = newStructTrace:getRecord(name)
+	var = newStructTrace.vars[name]
 	local rvsPropLP = var.erp:logProposalProb(propval, origval, var.params) + oldStructTrace:lpDiff(newStructTrace) - math.log(newNumVars)
 	local acceptanceProb = newStructTrace.logprob - currTrace.logprob + rvsPropLP - fwdPropLP + annealingLpRatio
 	if newStructTrace.conditionsSatisfied and math.log(math.random()) < acceptanceProb then
