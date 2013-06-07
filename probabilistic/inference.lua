@@ -204,13 +204,9 @@ end
 
 function LARJInterpolationTrace:proposeChange(varname, structureIsFixed)
 	assert(structureIsFixed)
-	local var1 = self.trace1.vars[varname]
-	local var2 = self.trace2.vars[varname]
-	local nextTrace = LARJInterpolationTrace:new(var1 and self.trace1:deepcopy() or self.trace1,
-												 var2 and self.trace2:deepcopy() or self.trace2,
-												 self.alpha, self.annealingKernel)
-	var1 = nextTrace.trace1.vars[varname]
-	var2 = nextTrace.trace2.vars[varname]
+	local nextTrace = self:deepcopy()
+	local var1 = nextTrace.trace1.vars[varname]
+	local var2 = nextTrace.trace2.vars[varname]
 	local var = var1 or var2
 	assert(not var.structural) 	-- We're only suposed to be making changes to non-structurals here
 	local propval = var.erp:proposal(var.val, var.params)
