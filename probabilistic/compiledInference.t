@@ -132,7 +132,7 @@ function CompiledGaussianDriftKernel:next(currState)
 	-- Prepare the additional arguments expected by the step function
 	-- We assume that the values for these arguments have been added to this
 	-- object under the correct names.
-	local additionalArgs = util.map(function(param) return self[param] end, self.additionalParams)
+	local additionalArgs = util.map(function(param) return currState[param] end, self.additionalParams)
 
 	-- Call the step function to advance the state
 	local newlp, accepted = self.stepfn(newState.varVals, currState.logprob, unpack(additionalArgs))
