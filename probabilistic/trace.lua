@@ -284,7 +284,25 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 
 end
 
+-- Does this trace have the variable named 'name'?
+function RandomExecutionTrace:hasVar(name)
+	return self.vars[name] ~= nil
+end
+
+-- Retrieve the property 'prop' of the variable record
+-- associated with the name 'name'
+function RandomExecutionTrace:getVarProp(name, prop)
+	return self.vars[name][prop]
+end
+
+-- Set the property 'prop' of the variable record
+-- associated with the name 'name'
+function RandomExecutionTrace:setVarProp(name, prop, val)
+	self.vars[name][prop] = val
+end
+
 -- Simply retrieve the variable record associated with 'name'
+-- (Not intended to be used by client code...)
 function RandomExecutionTrace:getRecord(name)
 	return self.vars[name]
 end

@@ -164,14 +164,42 @@ function LARJInterpolationTrace:freeVarNames(structural, nonstructural)
 	return util.keys(set)
 end
 
-function LARJInterpolationTrace:getRecord(varname)
-	local var1 = self.trace1:getRecord(varname)
-	local var2 = self.trace2:getRecord(varname)
-	return var1 or var2
+function LARJInterpolationTrace:hasVar(name)
+	return self.trace1:hasVar(name) or self.trace2:hasVar()
+end
+
+function LARJInterpolationTrace:getVarProp(name, prop)
+	local var1 = self.trace1:getRecord(name)
+	if var1 then
+		return var1[prop]
+	else
+		local var2 = self.trace2:getRecord(name)
+		if var2 then
+			return var2[prop]
+		else
+			return nil
+		end
+	end
+end
+
+function LARJInterpolationTrace:setVarProp(name, prop, val)
+	local var1 = self.trace1:getRecord(name)
+	local var2 = self.trace2:getRecord(name)
+	if var1 then
+		var1[prop] = val
+	end
+	if var2 then
+		var2[prop] = val
+	end
 end
 
 function LARJInterpolationTrace:deepcopy()
 	return LARJInterpolationTrace:new(self.trace1:deepcopy(), self.trace2:deepcopy(), self.alpha, self.annealingKernel)
+end
+
+function LARJInterpolationTrace:traceUpdate(structureIsFixed)
+	self.trace1:traceUpdate(structureIsFixed)
+	self.trace2:traceUpdate(structureIsFixed)
 end
 
 function LARJInterpolationTrace:proposeChange(varname, structureIsFixed)

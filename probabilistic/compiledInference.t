@@ -13,7 +13,7 @@ local CompiledTraceState =
 			if not self.retval then
 				local nonStructNames = self.trace:freeVarNames(false, true)
 				for i,n in ipairs(nonStructNames) do
-					self.trace:getRecord(n).val = self.varVals[i-1]
+					self.trace:setVarProp(n, "val", self.varVals[i-1])
 				end
 				-- TODO: denote that we're not accumulating probabilities or evaluating factors here?
 				self.trace:traceUpdate(true)
@@ -59,8 +59,7 @@ function CompiledTraceState:new(trace, other)
 			varVals = terralib.new(double[numNonStruct])
 		}
 		for i,n in ipairs(nonStructNames) do
-			local rec = trace:getRecord(n)
-			newobj.varVals[i-1] = rec.val
+			newobj.varVals[i-1] = trace:getVarProp(n, "val")
 		end
 	end
 	setmetatable(newobj, self)
@@ -110,8 +109,8 @@ function CompiledGaussianDriftKernel:assumeControl(currTrace)
 	local nonStructVars = currTrace:freeVarNames(false, true)
 	self.varBandWidths = terralib.new(double[currState.numVars])
 	for i,n in ipairs(nonStructVars) do
-		local rec = currTrace:getRecord(n)
-		self.varBandWidths[i-1] = self.bandwidthMap[rec.annotation] or self.defaultBandwidth
+		local ann = currTrace:getVarProp(n, "annotation")
+		self.varBandWidths[i-1] = self.bandwidthMap[ann] or self.defaultBandwidth
 	end
 
 	return currState
@@ -125,7 +124,7 @@ function CompiledGaussianDriftKernel:releaseControl(currState)
 	newTrace.logprob = currState.logprob
 	local nonStructVars = newTrace:freeVarNames(false, true)
 	for i,n in ipairs(nonStructVars) do
-		newTrace:getRecord(n).val = currState.varVals[i-1]
+		newTrace:setVarProp(n, "val", currState.varVals[i-1])
 	end
 	return newTrace
 end
@@ -161,7 +160,7 @@ function CompiledGaussianDriftKernel:needsRecompile(currTrace)
 	-- Direction 2: Is every var in our last encountered structure
 	-- also in the current trace?
 	for n,v in pairs(self.structuralVars) do
-		if not currTrace:getRecord(n) then
+		if not currTrace:hasVar(n) then
 			return true
 		end
 	end
