@@ -1,11 +1,12 @@
 local util = require("probabilistic.util")
 
+local IR = {}
 
 -------------------------------
 --  Terra/C type conversions --
 -------------------------------
 
-local terra2c = 
+IR.terra2c = 
 {
 	int8 = "char",
 	int16 = "short",
@@ -18,9 +19,9 @@ local terra2c =
 	uint64 = "unsigned long long"
 }
 
-local function terraTypeToCType(type)
+function IR.terraTypeToCType(type)
 	local typestr = tostring(type)
-	local trans = terra2c[typestr]
+	local trans = IR.terra2c[typestr]
 	return trans or typestr
 end
 
@@ -29,9 +30,9 @@ end
 --  Intermediate representation - Arithmetic expressions --
 -----------------------------------------------------------
 
-local IRNode = {}
+IR.Node = {}
 
-function IRNode:new(name)
+function IR.Node:new(name)
 	local newobj =
 	{
 		name = name,
@@ -42,31 +43,22 @@ function IRNode:new(name)
 	return newobj
 end
 
-function IRNode:childNodes()
+function IR.Node:childNodes()
 	return self.inputs
 end
 
 
+IR.ConstantNode = IR.Node:new()
 
-local function tabify(str, tablevel)
-	tablevel = tablevel or 0
-	for i=1,tablevel do str = "    " .. str end
-	return str
+function IR.ConstantNode:new(name)
+	return IR.Node.new(self, name)
 end
 
-
-
-local IRConstantNode = IRNode:new()
-
-function IRConstantNode:new(name)
-	return IRNode.new(self, name)
+function IR.ConstantNode:__tostring(tablevel)
+	return util.tabify(string.format("IR.ConstantNode: %s", tostring(self.name)), tablevel)
 end
 
-function IRConstantNode:__tostring(tablevel)
-	return tabify(string.format("IRConstantNode: %s", tostring(self.name)), tablevel)
-end
-
-function IRConstantNode:emitCode()
+function IR.ConstantNode:emitCode()
 	-- We need to make sure that number constants get turned into code that
 	-- a C compiler will treat as a floating point literal and not an integer literal.
 	if type(self.name) == "number" then
@@ -82,131 +74,146 @@ end
 
 
 
--- If val is already an IRNode subclass instance,
+-- If val is already an IR.Node subclass instance,
 -- then we're good
 -- Otherwise, turn val into a constant expression
 -- (but barf on tables; we can't handle those)
-function IRNode.nodify(val)
-	if getmetatable(getmetatable(val)) == IRNode then
+function IR.nodify(val)
+	if util.inheritsFrom(val, IR.Node) then
 		return val
 	elseif type(val) == "table" then
 		error("mathtracing: Cannot use tables as constant expressions.")
 	else
-		return IRConstantNode:new(val)
+		return IR.ConstantNode:new(val)
 	end
 end
 
 
 
-local IRUnaryOpNode = IRNode:new()
+function IR.traverse(rootNode, visitor)
+	local fringe = {rootNode}
+	local visited = {}
+	while table.getn(fringe) > 0 do
+		local top = table.remove(fringe)
+		if not visited[top] then
+			visited[top] = true
+			visitor(top)
+			util.appendarray(fringe, top:childNodes())
+		end
+	end
+end
 
-function IRUnaryOpNode:new(name, arg)
-	local newobj = IRNode.new(self, name)
-	table.insert(newobj.inputs, IRNode.nodify(arg))
+
+
+IR.UnaryOpNode = IR.Node:new()
+
+function IR.UnaryOpNode:new(name, arg)
+	local newobj = IR.Node.new(self, name)
+	table.insert(newobj.inputs, IR.nodify(arg))
 	return newobj
 end
 
-function IRUnaryOpNode:__tostring(tablevel)
+function IR.UnaryOpNode:__tostring(tablevel)
 	tablevel = tablevel or 0
-	return tabify(string.format("IRUnaryOpNode: %s\n%s",
+	return util.tabify(string.format("IR.UnaryOpNode: %s\n%s",
 		self.name, self.inputs[1]:__tostring(tablevel+1)), tablevel)
 end
 
-function IRUnaryOpNode:emitCode()
+function IR.UnaryOpNode:emitCode()
 	return string.format("%s(%s)", self.name, self.inputs[1]:emitCode())
 end
 
 
-local IRBinaryOpNode = IRNode:new()
+IR.BinaryOpNode = IR.Node:new()
 
-function IRBinaryOpNode:new(name, arg1, arg2)
-	local newobj = IRNode.new(self, name)
-	table.insert(newobj.inputs, IRNode.nodify(arg1))
-	table.insert(newobj.inputs, IRNode.nodify(arg2))
+function IR.BinaryOpNode:new(name, arg1, arg2)
+	local newobj = IR.Node.new(self, name)
+	table.insert(newobj.inputs, IR.nodify(arg1))
+	table.insert(newobj.inputs, IR.nodify(arg2))
 	return newobj
 end
 
-function IRBinaryOpNode:__tostring(tablevel)
+function IR.BinaryOpNode:__tostring(tablevel)
 	tablevel = tablevel or 0
-	return tabify(string.format("IRBinaryOpNode: %s\n%s\n%s",
+	return util.tabify(string.format("IR.BinaryOpNode: %s\n%s\n%s",
 		self.name, self.inputs[1]:__tostring(tablevel+1), self.inputs[2]:__tostring(tablevel+1)), tablevel)
 end
 
-function IRBinaryOpNode:emitCode()
+function IR.BinaryOpNode:emitCode()
 	return string.format("(%s) %s (%s)",
 		self.inputs[1]:emitCode(), self.name, self.inputs[2]:emitCode())
 end
 
-local IRUnaryPrimFuncNode = IRNode:new()
+IR.UnaryPrimFuncNode = IR.Node:new()
 
-function IRUnaryPrimFuncNode:new(name, arg)
-	local newobj = IRNode.new(self, name)
-	table.insert(newobj.inputs, IRNode.nodify(arg))
+function IR.UnaryPrimFuncNode:new(name, arg)
+	local newobj = IR.Node.new(self, name)
+	table.insert(newobj.inputs, IR.nodify(arg))
 	return newobj
 end
 
-function IRUnaryPrimFuncNode:__tostring(tablevel)
+function IR.UnaryPrimFuncNode:__tostring(tablevel)
 	tablevel = tablevel or 0
-	return tabify(string.format("IRUnaryPrimFuncNode: %s\n%s",
+	return util.tabify(string.format("IR.UnaryPrimFuncNode: %s\n%s",
 		self.name, self.inputs[1]:__tostring(tablevel+1)), tablevel)
 end
 
-function IRUnaryPrimFuncNode:emitCode()
+function IR.UnaryPrimFuncNode:emitCode()
 	return string.format("%s(%s)", self.name, self.inputs[1]:emitCode())
 end
 
 
-local IRBinaryPrimFuncNode = IRNode:new()
+IR.BinaryPrimFuncNode = IR.Node:new()
 
-function IRBinaryPrimFuncNode:new(name, arg)
-	local newobj = IRNode.new(self, name)
-	table.insert(newobj.inputs, IRNode.nodify(arg1))
-	table.insert(newobj.inputs, IRNode.nodify(arg2))
+function IR.BinaryPrimFuncNode:new(name, arg)
+	local newobj = IR.Node.new(self, name)
+	table.insert(newobj.inputs, IR.nodify(arg1))
+	table.insert(newobj.inputs, IR.nodify(arg2))
 	return newobj
 end
 
-function IRBinaryPrimFuncNode:__tostring(tablevel)
+function IR.BinaryPrimFuncNode:__tostring(tablevel)
 	tablevel = tablevel or 0
-	return tabify(string.format("IRBinaryPrimFuncNode: %s\n%s\n%s",
+	return util.tabify(string.format("IR.BinaryPrimFuncNode: %s\n%s\n%s",
 		self.name, self.inputs[1]:__tostring(tablevel+1), self.inputs[2]:__tostring(tablevel+1)), tablevel)
 end
 
-function IRBinaryPrimFuncNode:emitCode()
+function IR.BinaryPrimFuncNode:emitCode()
 	return string.format("%s((%s), %(s))",
 		self.name, self.inputs[1]:emitCode(), self.inputs[2]:emitCode())
 end
 
-local IRCompiledFuncNode = IRNode:new()
+IR.CompiledFuncNode = IR.Node:new()
 
-function IRCompiledFuncNode:new(name, arglist)
-	local newobj = IRNode.new(self, name)
+function IR.CompiledFuncNode:new(name, arglist)
+	local newobj = IR.Node.new(self, name)
 	for i,a in ipairs(arglist) do
-		arglist[i] = IRNode.nodify(a)
+		arglist[i] = IR.nodify(a)
 	end
 	newobj.inputs = arglist
 	return newobj
 end
 
--- TODO: Define __tostring and emitCode for IRCompiledFuncNode??
+-- TODO: Define __tostring and emitCode for IR.CompiledFuncNode!
 
 
 -- These refer to variables that are either inputs to the overall trace function
 -- or intermediates created during CSE
-local IRVarNode = IRNode:new()
+IR.VarNode = IR.Node:new()
 
-function IRVarNode:new(name, type, isRandomVariable)
-	assert(isRandomVariable ~= nil)
-	local newobj = IRNode.new(self, name)
+-- 'type' should be a Terra type
+function IR.VarNode:new(name, type, isRandomVariable)
+	local newobj = IR.Node.new(self, name)
 	newobj.type = type
 	newobj.isRandomVariable = isRandomVariable
 	return newobj
 end
 
-function IRVarNode:__tostring(tablevel)
-	return tabify(string.format("IRVarNode: %s %s", tostring(self.type), self.name), tablevel)
+function IR.VarNode:__tostring(tablevel)
+	return util.tabify(string.format("IR.VarNode: %s %s", tostring(self.type), self.name), tablevel)
 end
 
-function IRVarNode:emitCode()
+function IR.VarNode:emitCode()
 	return self.name
 end
 
@@ -217,15 +224,16 @@ end
 
 
 -- These'll be used to store intermediates created during CSE
-local IRVarDefinition = {}
+IR.VarDefinition = {}
 
--- 'lhs' is an IRVarNode
--- 'rhs' is an IRNode or a constant
-function IRVarDefinition:new(lhs, rhs, type)
+-- 'lhs' is an IR.VarNode
+-- 'rhs' is an IR.Node or a constant
+-- 'type' is a Terra type
+function IR.VarDefinition:new(lhs, rhs, type)
 	local newobj =
 	{
 		lhs = lhs,
-		rhs = IRNode.nodify(rhs),
+		rhs = IR.nodify(rhs),
 		type = type
 	}
 	setmetatable(newobj, self)
@@ -233,55 +241,56 @@ function IRVarDefinition:new(lhs, rhs, type)
 	return newobj
 end
 
-function IRVarDefinition:childNodes()
+function IR.VarDefinition:childNodes()
 	return {lhs, rhs}
 end
 
-function IRVarDefinition:__tostring(tablevel)
+function IR.VarDefinition:__tostring(tablevel)
 	tablevel = tablevel or 0
-	return tabify(string.format("IRVarDefinition: %s %s\n%s",
+	return util.tabify(string.format("IR.VarDefinition: %s %s\n%s",
 		tostring(self.type), self.lhs, self.rhs:__tostring(tablevel+1)), tablevel)
 end
 
-function IRVarDefinition:emitCode()
-	return string.format("%s %s = (%s);", terraTypeToCType(self.type), self.lhs:emitCode(), self.rhs:emitCode())
+function IR.VarDefinition:emitCode()
+	return string.format("%s %s = (%s);", IR.terraTypeToCType(self.type), self.lhs:emitCode(), self.rhs:emitCode())
 end
 
 
 -- A return statement for returning from functions
-local IRReturnStatement = {}
+IR.ReturnStatement = {}
 
-function IRReturnStatement:new(exp)
+function IR.ReturnStatement:new(exp)
 	local newobj = 
 	{
-		exp = IRNode.nodify(exp)
+		exp = IR.nodify(exp)
 	}
 	setmetatable(newobj, self)
 	self.__index = self
 	return newobj
 end
 
-function IRReturnStatement:childNodes()
+function IR.ReturnStatement:childNodes()
 	return {exp}
 end
 
-function IRReturnStatement:__tostring(tablevel)
-	return tabify(string.format("IRReturnStatement:\n%s", self.exp:__tostring(tablevel+1)), tablevel)
+function IR.ReturnStatement:__tostring(tablevel)
+	return util.tabify(string.format("IR.ReturnStatement:\n%s", self.exp:__tostring(tablevel+1)), tablevel)
 end
 
-function IRReturnStatement:emitCode()
+function IR.ReturnStatement:emitCode()
 	return string.format("return %s;", self.exp:emitCode())
 end
 
 
 -- A list of IR statements can be wrapped into a function
-local IRFunctionDefinition = {}
+IR.FunctionDefinition = {}
 
--- 'args' is a list of IRVarNodes representing numeric variables
+-- 'args' is a list of IR.VarNodes representing numeric variables
 -- 'bodylist' is a list of IR statements (expression nodes, assignments, etc.)
+-- 'rettype' is a Terra type
 -- The return value of the function is the last item in 'bodylist' and is assumed to
 --   be a numeric-valued expression
-function IRFunctionDefinition:new(name, rettype, args, bodylist)
+function IR.FunctionDefinition:new(name, rettype, args, bodylist)
 	local newobj =
 	{
 		name = name,
@@ -290,25 +299,25 @@ function IRFunctionDefinition:new(name, rettype, args, bodylist)
 		bodylist = bodylist
 	}
 	local n = table.getn(newobj.bodylist)
-	newobj.bodylist[n] = IRReturnStatement:new(newobj.bodylist[n])
+	newobj.bodylist[n] = IR.ReturnStatement:new(newobj.bodylist[n])
 	setmetatable(newobj, self)
 	self.__index = self
 	return newobj
 end
 
-function IRFunctionDefinition:childNodes()
+function IR.FunctionDefinition:childNodes()
 	return util.joinarrays(args, bodylist)
 end
 
-function IRFunctionDefinition:__tostring(tablevel)
+function IR.FunctionDefinition:__tostring(tablevel)
 	tablevel = tablevel or 0
-	local str = tabify(string.format("IRFunctionDefinition: %s %s\n",
+	local str = util.tabify(string.format("IR.FunctionDefinition: %s %s\n",
 		tostring(self.type), self.name), tablevel)
-	str = str .. tabify("args:\n", tablevel+1)
+	str = str .. util.tabify("args:\n", tablevel+1)
 	for i,a in ipairs(self.args) do
 		str = str .. string.format("%s\n", a:__tostring(tablevel+2))
 	end
-	str = str .. tabify("body:\n", tablevel+1)
+	str = str .. util.tabify("body:\n", tablevel+1)
 	for i,b in ipairs(self.bodylist) do
 		str = str .. string.format("%s\n", b:__tostring(tablevel+2))
 	end
@@ -316,8 +325,8 @@ function IRFunctionDefinition:__tostring(tablevel)
 	return str
 end
 
-function IRFunctionDefinition:emitCode()
-	local str = string.format("%s %s(", terraTypeToCType(self.rettype), self.name)
+function IR.FunctionDefinition:emitCode()
+	local str = string.format("%s %s(", IR.terraTypeToCType(self.rettype), self.name)
 	local numargs = table.getn(self.args)
 	for i,a in ipairs(self.args) do
 		local postfix = i == numargs and "" or ", "
@@ -367,7 +376,7 @@ local function addUnaryOps(tabl, oplist)
 		local cname = op[2]
 		tabl[luaname] =
 		function(n)
-			return IRUnaryOpNode:new(cname, n)
+			return IR.UnaryOpNode:new(cname, n)
 		end
 	end
 end
@@ -378,7 +387,7 @@ local function addBinaryOps(tabl, oplist)
 		local cname = op[2]
 		tabl[luaname] =
 		function(n1, n2)
-			return IRBinaryOpNode:new(cname, n1, n2)
+			return IR.BinaryOpNode:new(cname, n1, n2)
 		end
 	end
 end
@@ -389,7 +398,7 @@ local function addUnaryFuncs(tabl, funclist)
 		local cname = fn[2]
 		tabl[luaname] =
 		function(n)
-			return IRUnaryPrimFuncNode:new(cname, n)
+			return IR.UnaryPrimFuncNode:new(cname, n)
 		end
 	end
 end
@@ -400,7 +409,7 @@ local function addBinaryFuncs(tabl, funclist)
 		local cname = fn[2]
 		tabl[luaname] =
 		function(n1, n2)
-			return IRBinaryPrimFuncNode:new(cname, n1, n2)
+			return IR.BinaryPrimFuncNode:new(cname, n1, n2)
 		end
 	end
 end
@@ -412,7 +421,7 @@ local function addWrappedUnaryFuncs(tabl, funclist)
 		local origfn = fn[3]
 		tabl[luaname] = wrapUnaryMathFunc(origfn,
 			function(n)
-				return IRUnaryPrimFuncNode:new(cname, n)
+				return IR.UnaryPrimFuncNode:new(cname, n)
 			end
 		)
 	end
@@ -425,7 +434,7 @@ local function addWrappedBinaryFuncs(tabl, funclist)
 		local origfn = fn[3]
 		tabl[luaname] = wrapBinaryMathFunc(origfn,
 			function(n1, n2)
-				return IRBinaryPrimFuncNode:new(cname, n1, n2)
+				return IR.BinaryPrimFuncNode:new(cname, n1, n2)
 			end
 		)
 	end
@@ -448,19 +457,28 @@ addBinaryFuncs(operators, {
 })
 -- We can't 'inherit' overloaded operators, so
 -- we have to stuff the operators into every 'class' metatable
-util.copytablemembers(operators, IRConstantNode)
-util.copytablemembers(operators, IRVarNode)
-util.copytablemembers(operators, IRUnaryOpNode)
-util.copytablemembers(operators, IRBinaryOpNode)
-util.copytablemembers(operators, IRUnaryPrimFuncNode)
-util.copytablemembers(operators, IRBinaryPrimFuncNode)
-util.copytablemembers(operators, IRCompiledFuncNode)
+util.copytablemembers(operators, IR.ConstantNode)
+util.copytablemembers(operators, IR.VarNode)
+util.copytablemembers(operators, IR.UnaryOpNode)
+util.copytablemembers(operators, IR.BinaryOpNode)
+util.copytablemembers(operators, IR.UnaryPrimFuncNode)
+util.copytablemembers(operators, IR.BinaryPrimFuncNode)
+util.copytablemembers(operators, IR.CompiledFuncNode)
 
 -- Math functions --
 local irmath = 
 {
+	deg = math.deg,
+	frexp = math.frexp,
 	huge = math.huge,
-	pi = math.pi
+	ldexp = math.ldexp,
+	max = math.max,
+	min = math.min,
+	modf = math.modf,
+	pi = math.pi,
+	rad = math.rad,
+	random = math.random,
+	randomseed = math.randomseed
 }
 addWrappedUnaryFuncs(irmath, {
 	{"abs", "abs", math.abs},
@@ -527,30 +545,6 @@ local function setNumberType(newnumtype)
 end
 
 
--- Client code needs to be able to create free variables
-local function makeVar(name, type, isRandomVariable)
-	return IRVarNode:new(name, type, isRandomVariable)
-end
--- ...and for the time being, create functions
-local function makeFunction(name, rettype, args, bodylist)
-	return IRFunctionDefinition:new(name, rettype, args, bodylist)
-end
-
-
-function IRTraverse(rootNode, visitor)
-	local fringe = {rootNode}
-	local visited = {}
-	while table.getn(fringe) > 0 do
-		local top = table.remove(fringe)
-		if not visited[top] then
-			visited[top] = true
-			visitor(top)
-			util.appendarray(fringe, top:childNodes())
-		end
-	end
-end
-
-
 -- exports
 return
 {
@@ -559,9 +553,7 @@ return
 	isOn = isOn,
 	numberType = numberType,
 	setNumberType = setNumberType,
-	makeVar = makeVar,
-	makeFunction = makeFunction,
-	IRTraverse = IRTraverse
+	IR = IR
 }
 
 
@@ -576,8 +568,8 @@ return
 -- 	return math.sqrt(xdiff*xdiff + ydiff*ydiff)
 -- end
 
--- local p1 = {IRVarNode:new("x1"), IRVarNode:new("y1")}
--- --local p2 = {IRVarNode:new("x2"), IRVarNode:new("y2")}
+-- local p1 = {IR.VarNode:new("x1"), IR.VarNode:new("y1")}
+-- --local p2 = {IR.VarNode:new("x2"), IR.VarNode:new("y2")}
 -- -- local p1 = {0, 0}
 -- local p2 = {1, math.pi}
 -- print(dist(p1, p2):emitCode())

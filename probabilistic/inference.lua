@@ -141,7 +141,7 @@ function LARJInterpolationTrace:new(trace1, trace2, alpha, annealingKernel)
 		annealingKernel = annealingKernel
 	}
 	if annealingKernel.usesMathtracing() then
-		newobj.alpha = mt.makeVar("larjAnnealAlpha", "double", false)
+		newobj.alpha = mt.IR.VarNode:new("larjAnnealAlpha", double)
 	else
 		newobj.alpha = alpha
 	end

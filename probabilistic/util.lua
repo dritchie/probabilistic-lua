@@ -85,6 +85,12 @@ function M.appendarray(srcarr, dstarr)
 	end
 end
 
+function M.tabify(str, tablevel)
+	tablevel = tablevel or 0
+	for i=1,tablevel do str = "    " .. str end
+	return str
+end
+
 function M.randomChoice(tbl)
 	local n = table.getn(tbl)
 	if n > 0 then
@@ -106,6 +112,25 @@ function M.openpackage(ns)
 	for n,v in pairs(ns) do
 		rawset(_G, n, v)
 	end
+end
+
+function M.inheritsFrom(child, parent)
+	local visited = {}	-- avoid cycles
+	if child == nil or parent == nil then
+		return false
+	end
+	local mt = child
+	repeat
+		if visited[mt] then
+			return false
+		end
+		visited[mt] = true
+		mt = getmetatable(mt)
+		if mt == parent then
+			return true
+		end
+	until mt == nil
+	return false
 end
 
 

@@ -133,12 +133,7 @@ function RandomExecutionTrace:traceUpdate(structureIsFixed)
 	self.rootframe = debug.getinfo(1, 'p').fnprotoid
 
 	-- Run the computation, which will create/lookup random variables
-	-- NOTE: Turning the JIT off like this is definitely safe (interpreter
-	--	stack will be preserved where we need it), but it may be overly
-	--  conservative (we may be able to turn the JIT back on at some parts...) 
-	--jit.off()
 	self.returnValue = self.computation()
-	--jit.on()
 
 	-- Clean up
 	self.rootframe = nil
@@ -214,7 +209,6 @@ end
 -- Looks up the value of a random variable.
 -- Creates the variable if it does not already exist
 function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, conditionedValue, annotation)
-
 	local record = nil
 	local name = nil
 	-- Try to find the variable (first check the flat list, then do slower name lookup)
@@ -247,7 +241,7 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 		if mt.isOn() and not isStructural then
 			record.__val = record.val
 			-- (currVarIndex - 1) because Terra and C use 0-based-indexing
-			record.val = mt.makeVar(string.format("vars[%d]", self.currVarIndex-1), mt.numberType(), true)
+			record.val = mt.IR.VarNode:new(string.format("vars[%d]", self.currVarIndex-1), mt.numberType(), true)
 			hasChanges = true
 		end
 

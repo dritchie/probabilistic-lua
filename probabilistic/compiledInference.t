@@ -104,7 +104,7 @@ function CompiledGaussianDriftKernel:assumeControl(currTrace)
 	local currState = CompiledTraceState:new(currTrace)
 
 	-- Check for structure change/need recompile
-	-- TODO: Implement caching of compiled traces?
+	-- TODO: Implement caching of compiled traces??
 	if self:needsRecompile(currTrace) then
 		self:compile(currTrace)
 	end
@@ -185,7 +185,7 @@ local FindNonRandomVariablesVisitor =
 {
 	__call =
 	function(self, node)
-		if node.isRandomVariable ~= nil and not node.isRandomVariable then
+		if util.inheritsFrom(node, mt.IR.VarNode) and not node.isRandomVariable then
 			table.insert(self.vars, node)
 		end
 	end
@@ -225,15 +225,15 @@ function CompiledGaussianDriftKernel:compile(currTrace)
 	-- Look for all non-random variables in the log prob expression
 	-- These will become additional parameters to our specialized step function
 	local visitor = FindNonRandomVariablesVisitor:new()
-	mt.IRTraverse(currTrace.logprob, visitor)
+	mt.IR.traverse(currTrace.logprob, visitor)
 	self.additionalParams = util.map(function(v) return v.name end, visitor.vars)
 
 	-- Generate a specialized logprob function that accepts each of these
 	-- as an additional argument
 	local fnargs = util.copytable(visitor.vars)
-	table.insert(fnargs, mt.makeVar("vars", "double*", false))
+	table.insert(fnargs, mt.IR.VarNode:new("vars", "double*"))
 	local fnname = string.format("logprob%s", tostring(symbol()))
-	local fn = mt.makeFunction(fnname, "double", fnargs, {currTrace.logprob})
+	local fn = mt.IR.FunctionDefinition:new(fnname, "double", fnargs, {currTrace.logprob})
 	local C = terralib.includecstring(string.format("#include <math.h>\n\n%s", fn:emitCode()))
 
 	-- Generate a specialized step function that accepts each of these
