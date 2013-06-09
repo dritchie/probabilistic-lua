@@ -83,7 +83,7 @@ function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth)
 		bandwidthMap = bandwidthMap,
 		defaultBandwidth = defaultBandwidth,
 
-		structuralVars = {},
+		structuralSigs = {},
 		stepfn = nil,
 		additionalParams = {},
 
@@ -105,9 +105,7 @@ function CompiledGaussianDriftKernel:assumeControl(currTrace)
 
 	-- Check for structure change/need recompile
 	-- TODO: Implement caching of compiled traces??
-	if self:needsRecompile(currTrace) then
-		self:compile(currTrace)
-	end
+	self:compile(currTrace)
 
 	return currState
 end
@@ -147,36 +145,23 @@ function CompiledGaussianDriftKernel:next(currState)
 	return newState
 end
 
-function CompiledGaussianDriftKernel:needsRecompile(currTrace)
+function CompiledGaussianDriftKernel:compile(currTrace)
+	local sigs = currTrace:structuralSignatures()
+	-- If we have no compiled lp function, then we definitely
+	-- need to compile
 	if not self.compiledLogProbFn then
-		return true
-	end
-	-- Check if every variable from the current
-	-- trace is in our last-encountered structure and vice-versa,
-	-- and that those variables have the same value
-	local svarnames = currTrace:freeVarNames(true, false)
-	-- Direction 1: Is every struct. var in the current trace also in
-	-- our last-encountered structure?
-	for i,n in ipairs(svarnames) do
-		if not self.structuralVars[n] then
-			return true
+		self:doCompile(currTrace)
+	else
+		-- Check if currTrace's structural signatures is one of our
+		-- current structural signatures
+		for i,s in ipairs(sigs) do
+			if self.structuralSigs[s] then
+				return
+			end
 		end
+		self:doCompile(currTrace)
 	end
-	-- Direction 2: Is every var in our last encountered structure
-	-- also in the current trace?
-	for n,v in pairs(self.structuralVars) do
-		if not currTrace:hasVar(n) then
-			return true
-		end
-	end
-	-- We have the same set of variables. Are their values also the same?
-	for n,v in pairs(self.structuralVars) do
-		if v.val ~= currTrace:getVarProp(n, "val") then
-			return true
-		end
-	end
-	-- We're good; no recompile needed
-	return false
+	self.structuralSigs = sigs
 end
 
 -- Callable object that, when passed to IRNode.traverse,
@@ -201,7 +186,7 @@ function FindNonRandomVariablesVisitor:new()
 	return newobj
 end
 
-function CompiledGaussianDriftKernel:compile(currTrace)
+function CompiledGaussianDriftKernel:doCompile(currTrace)
 
 	-- Get the proposal bandwidth of each nonstructural
 	local nonStructVars = currTrace:freeVarNames(false, true)

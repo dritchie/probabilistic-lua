@@ -103,6 +103,24 @@ function RandomExecutionTrace:lpDiff(other)
 			self:varDiff(other)))
 end
 
+-- A list of objects (typically strings) which uniquely identify
+-- the structure of this execution trace
+-- (These are typically used as keys in a hash table)
+-- Most traces only have one such unique identifier, but some
+-- (e.g. LARJ annealing traces) may have two or more equivalent
+-- identifiers. Thus, this method returns a list.
+function RandomExecutionTrace:structuralSignatures()
+	local sig = ""
+	-- Loop through the variables in order of creation
+	-- Add a [name]<val> chunk to the signature for every structural variable
+	for i,v in ipairs(self.varlist) do
+		if v.structural then
+			sig = string.format("%s,[%s]<%g>", sig, v.name, v.val)
+		end
+	end
+	return {sig}
+end
+
 -- The singleton trace object
 local trace = nil
 

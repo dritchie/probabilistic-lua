@@ -197,6 +197,12 @@ function LARJInterpolationTrace:deepcopy()
 	return LARJInterpolationTrace:new(self.trace1:deepcopy(), self.trace2:deepcopy(), self.alpha, self.annealingKernel)
 end
 
+function LARJInterpolationTrace:structuralSignatures()
+	local sig1 = self.trace1:structuralSignatures()[1]
+	local sig2 = self.trace2:structuralSignatures()[1]
+	return {string.format("%s,%s", sig1, sig2), string.format("%s,%s", sig2, sig1)}
+end
+
 function LARJInterpolationTrace:traceUpdate(structureIsFixed)
 	self.trace1:traceUpdate(structureIsFixed)
 	self.trace2:traceUpdate(structureIsFixed)
