@@ -38,7 +38,8 @@ function RandomExecutionTrace:new(computation, doRejectionInit)
 		rootframe = nil,
 		loopcounters = {},
 		conditionsSatisfied = false,
-		returnValue = nil
+		returnValue = nil,
+		evaluatingFactorThunks = true
 	}
 	setmetatable(newobj, self)
 	self.__index = self
@@ -60,6 +61,7 @@ function RandomExecutionTrace:deepcopy()
 	newdb.newlogprob = self.newlogprob
 	newdb.conditionsSatisfied = self.conditionsSatisfied
 	newdb.returnValue = self.returnValue
+	newdb.evaluatingFactorThunks = self.evaluatingFactorThunks
 
 	for i,v in ipairs(self.varlist) do
 		local newv = v:copy()
@@ -119,6 +121,14 @@ function RandomExecutionTrace:structuralSignatures()
 		end
 	end
 	return {sig}
+end
+
+-- Toggle factor evaluation on/off
+-- If off, then factor thunks will not be evaluated
+-- When factors are very expensive, this saves a lot of time
+-- If we only need to run the program forward to regenerate some result.
+function RandomExecutionTrace:toggleFactorEval(switch)
+	self.evaluatingFactorThunks = switch
 end
 
 -- The singleton trace object
@@ -318,6 +328,13 @@ function RandomExecutionTrace:addFactor(num)
 	self.logprob = self.logprob + num
 end
 
+-- Evaluate a thunk and add the result into the log-likelihood of this trace
+function RandomExecutionTrace:addFactorThunk(thunk)
+	if self.evaluatingFactorThunks then
+		self.logprob = self.logprob + thunk()
+	end
+end
+
 -- Condition the trace on the value of a boolean expression
 function RandomExecutionTrace:conditionOn(boolexpr)
 	self.conditionsSatisfied = self.conditionsSatisfied and boolexpr
@@ -343,6 +360,12 @@ end
 local function factor(num)
 	if trace then
 		trace:addFactor(num)
+	end
+end
+
+local function factorThunk(thunk)
+	if trace then
+		trace:addFactorThunk(thunk)
 	end
 end
 

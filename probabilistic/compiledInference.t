@@ -17,8 +17,11 @@ local CompiledTraceState =
 				for i,n in ipairs(nonStructNames) do
 					self.trace:setVarProp(n, "val", self.varVals[i-1])
 				end
-				-- TODO: denote that we're not accumulating probabilities or evaluating factors here?
+				-- We don't need to evaluate expensive factors just to reconstruct
+				-- the return value
+				self.trace:toggleFactorEval(false)
 				self.trace:traceUpdate(true)
+				self.trace:toggleFactorEval(true)
 				self.retval = self.trace.returnValue
 			end
 			return self.retval

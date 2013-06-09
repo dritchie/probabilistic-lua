@@ -203,6 +203,11 @@ function LARJInterpolationTrace:structuralSignatures()
 	return {string.format("%s,%s", sig1, sig2), string.format("%s,%s", sig2, sig1)}
 end
 
+function LARJInterpolationTrace:toggleFactorEval(switch)
+	self.trace1:toggleFactorEval(switch)
+	self.trace2:toggleFactorEval(switch)
+end
+
 function LARJInterpolationTrace:traceUpdate(structureIsFixed)
 	self.trace1:traceUpdate(structureIsFixed)
 	self.trace2:traceUpdate(structureIsFixed)
