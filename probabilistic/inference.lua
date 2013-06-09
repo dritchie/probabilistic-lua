@@ -424,7 +424,7 @@ end
 
 -- Sample from a probabilistic computation using locally
 -- annealed reversible jump mcmc
-local function LARJMH(computation, numsamps, annealSteps, jumpFreq, lag, verbose)
+local function LARJMH(computation, numsamps, lag, verbose, annealSteps, jumpFreq)
 	lag = (lag == nil) and 1 or lag
 	return mcmc(computation,
 				LARJKernel:new(RandomWalkKernel:new(false, true), annealSteps, jumpFreq),

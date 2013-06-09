@@ -23,12 +23,12 @@ end
 function mhtest(name, computation, trueExpectation, tolerance)
 	tolerance = tolerance or errorTolerance
 	--test(name, replicate(runs, function() return expectation(computation, traceMH, samples, lag) end), trueExpectation, tolerance)
-	test(name, replicate(runs, function() return expectation(computation, LARJMH, samples, 0, nil, lag) end), trueExpectation, tolerance)
+	test(name, replicate(runs, function() return expectation(computation, LARJMH, samples, lag, false, 0) end), trueExpectation, tolerance)
 end
 
 function larjtest(name, computation, trueExpectation, tolerance)
 	tolerance = tolerance or errorTolerance
-	test(name, replicate(runs, function() return expectation(computation, LARJMH, samples, 10, nil, lag) end), trueExpectation, tolerance)
+	test(name, replicate(runs, function() return expectation(computation, LARJMH, samples, lag, false, 10) end), trueExpectation, tolerance)
 end
 
 function customtest(name, computation, trueExpectation, tolerance, sampler, ...)
@@ -469,7 +469,7 @@ if terralib then
 		end,
 		0.1,
 		errorTolerance,
-		fixedStructureDriftMH, samples, {}, 0.25, lag)
+		fixedStructureDriftMH, samples, lag, false, {}, 0.25)
 
 end
 

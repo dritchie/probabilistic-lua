@@ -69,6 +69,64 @@ function CompiledTraceState:new(trace, other)
 end
 
 
+-- A cache for compiled traces
+local CompiledTraceCache = {}
+
+function CompiledTraceCache:new(size)
+	size = size or 10
+	local newobj = 
+	{
+		maxSize = size,
+		currSize = 0,
+		cache = {}
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function CompiledTraceCache:lookup(signatures)
+	for i,s in ipairs(signatures) do
+		local entry = self.cache[s]
+		if entry then
+			return entry.fn
+		end
+	end
+	return nil
+end
+
+function CompiledTraceCache:add(signatures, fn)
+	local n = table.getn(signatures)
+	if self.currSize + n > self.maxSize then
+		for i=1,n do
+			self:evictLRU()
+		end
+	end
+	local entry = 
+	{
+		fn = fn,
+		timestamp = os.clock()
+	}
+	for i,s in ipairs(signatures) do
+		self.cache[s] = entry
+	end
+	self.currSize = self.currSize + n
+end
+
+function CompiledTraceCache:evictLRU()
+	local earliestTime = math.huge
+	local earliestSig = nil
+	for s,e in pairs(self.cache) do
+		if e.timestamp < earliestTime then
+			earliestTime = e.timestamp
+			earliestSig = s
+		end
+	end
+	self.cache[earliestSig] = nil
+	self.currSize = self.currSize-1
+end
+
+
 -- An MCMC kernel that performs fixed-structure gaussian drift
 -- by JIT-compiling all proposal/probability calculations
 -- into machine code
@@ -77,16 +135,22 @@ local CompiledGaussianDriftKernel = {}
 -- 'bandwidthMap' stores a map from type identifiers to gaussian drift bandwidths
 -- The type identifers are assumed to be used in the ERP 'annotation' fields
 -- 'defaultBandwidth' is the bandwidth to use if an ERP has no type annotation
-function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth)
+function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSize)
 	local newobj = 
 	{
+		-- Proposal bandwidth stuff
 		bandwidthMap = bandwidthMap,
 		defaultBandwidth = defaultBandwidth,
 
-		structuralSigs = {},
-		stepfn = nil,
+		-- Current compiled stuff as well as cached compiled results
+		currStructuralSigs = {},
+		currStepFn = nil,
+		compileCache = CompiledTraceCache:new(cacheSize),
+
+		-- Additional parameters expected by the step function
 		additionalParams = {},
 
+		-- Analytics
 		proposalsMade = 0,
 		proposalsAccepted = 0
 	}
@@ -133,7 +197,7 @@ function CompiledGaussianDriftKernel:next(currState)
 	local additionalArgs = util.map(function(param) return currState[param] end, self.additionalParams)
 
 	-- Call the step function to advance the state
-	local newlp, accepted = self.stepfn(newState.varVals, currState.logprob, unpack(additionalArgs))
+	local newlp, accepted = self.currStepFn(newState.varVals, currState.logprob, unpack(additionalArgs))
 	newState.logprob = newlp
 
 	-- Update analytics and continue
@@ -147,21 +211,15 @@ end
 
 function CompiledGaussianDriftKernel:compile(currTrace)
 	local sigs = currTrace:structuralSignatures()
-	-- If we have no compiled lp function, then we definitely
-	-- need to compile
-	if not self.compiledLogProbFn then
-		self:doCompile(currTrace)
+	-- Look for an already-compiled trace in the cache
+	local fn = self.compileCache:lookup(sigs)
+	if fn then
+		self.currStepFn = fn
 	else
-		-- Check if currTrace's structural signatures is one of our
-		-- current structural signatures
-		for i,s in ipairs(sigs) do
-			if self.structuralSigs[s] then
-				return
-			end
-		end
 		self:doCompile(currTrace)
+		self.compileCache:add(sigs, self.currStepFn)
 	end
-	self.structuralSigs = sigs
+	self.currStructuralSigs = sigs
 end
 
 -- Callable object that, when passed to IRNode.traverse,
@@ -223,7 +281,7 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 
 	-- Generate a specialized step function that accepts each of these
 	-- as an additional argument
-	self.stepfn = self:genStepFunction(numVars, visitor.vars, C[fnname], bandwidths)
+	self.currStepFn = self:genStepFunction(numVars, visitor.vars, C[fnname], bandwidths)
 
 	-- Restore original logprob value
 	currTrace.logprob = savedLP
@@ -287,10 +345,10 @@ end
 
 -- Sample from a fixed-structure probabilistic computation for some
 -- number of iterations using compiled Gaussian drift MH
-local function fixedStructureDriftMH(computation, numsamps, bandwidthMap, defaultBandwidth, lag, verbose)
+local function fixedStructureDriftMH(computation, numsamps, lag, verbose, bandwidthMap, defaultBandwidth, cacheSize)
 	lag = (lag == nil) and 1 or lag
 	return inf.mcmc(computation,
-					CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth),
+					CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSize),
 					numsamps, lag, verbose)
 end
 
