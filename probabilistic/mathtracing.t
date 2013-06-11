@@ -202,8 +202,8 @@ end
 
 IR.CompiledFuncNode = IR.Node:new()
 
-function IR.CompiledFuncNode:new(value, arglist)
-	local newobj = IR.Node.new(self, value)
+function IR.CompiledFuncNode:new(fn, arglist)
+	local newobj = IR.Node.new(self, fn)
 	for i,a in ipairs(arglist) do
 		arglist[i] = IR.nodify(a)
 	end
@@ -211,7 +211,42 @@ function IR.CompiledFuncNode:new(value, arglist)
 	return newobj
 end
 
--- TODO: Define __tostring and emitCCode for IR.CompiledFuncNode!
+function IR.CompiledFuncNode:__tostring(tablevel)
+	tablevel = tablevel or 0
+	local str = util.tabify(string.format("IR.CompiledFuncNode: %s\n", self.value.name), tablevel)
+	for i,a in ipairs(self.inputs) do
+		str = string.format("%s%s\n", str, a:__tostring(tablevel+1))
+	end
+	return str
+end
+
+-- NOTE: This assumes the function is not overloaded (i.e. has a single definition)
+function IR.CompiledFuncNode:emitCCode()
+	-- Name the function via function pointer
+	local fnpointer = self.value.definitions[1]:getpointer()
+	local fntype = self.value.definitions[1]:gettype()
+	local fnpstr = string.format("%s(*)", IR.terraTypeToCType(fntype.returns[1]))
+	if table.getn(fntype.parameters) == 0 then
+		fnpstr = string.format("%s(void)", fnpstr)
+	else
+		fnpstr = string.format("%s(%s", fnpstr, IR.terraTypeToCType(fntype.parameters[1]))
+		for i=2,table.getn(fntype.parameters) do
+			fnpstr = string.format("%s,%s", fnpstr, IR.terraTypeToCType(fntype.parameters[i]))
+		end
+		fnpstr = string.format("%s)", fnpstr)
+	end
+	fnpstr = string.format("((%s)%u)", fnpstr, terralib.cast(uint64, fnpointer))
+	-- Then actually call it
+	local str = string.format("%s(%s,", fnpstr, self.inputs[1]:emitCCode())
+	for i=2,table.getn(self.inputs) do
+		str = string.format("%s,%s", str, self.inputs[i]:emitCCode())
+	end
+	return string.format("%s)", str)
+end
+
+function IR.CompiledFuncNode:emitTerraCode()
+	return `[self.value]([util.map(function(n) return n:emitTerraCode() end, self.inputs)])
+end
 
 
 -- These refer to variables that are either inputs to the overall trace function
@@ -490,6 +525,32 @@ local function realNumberType()
 end
 local function setRealNumberType(newnumtype)
 	realnumtype = newnumtype
+end
+
+-- These functions set up / tear down the modifications
+-- necessary to trace over precompiled functions
+local terra terrafn()
+	return 0
+end
+local terrafncall = nil
+local function setupPrecompiledFuncTracing()
+	local mt = getmetatable(terrafn)
+	terrafncall = mt.__call
+	mt.__call = function(fn, ...)
+		-- If any of the arguments to the function are IR.Nodes, we
+		-- create a node here. Else, just call it normally
+		local numargs = select("#", ...)
+		for i=1,numargs do
+			if util.inherits(select(i, ...), IR.Node) then
+				return IR.CompiledFuncNode(fn, ...)
+			end
+		end
+		return terrafncall(fn, ...)
+	end
+end
+local function teardownPrecompiledFuncTracing()
+	local mt = getmetatable(terrafn)
+	mt.__call = terrafncall
 end
 
 -- Toggling mathtracing mode --
