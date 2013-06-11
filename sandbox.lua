@@ -225,11 +225,11 @@ end
 local numsamps = 100000
 
 local t11 = os.clock()
-LARJMH(circleOfDots, numsamps, 0, nil, 1, true)
+LARJMH(circleOfDots, numsamps, 1, true, 0)
 local t12 = os.clock()
 
 local t21 = os.clock()
-fixedStructureDriftMH(circleOfDots, numsamps, {}, 0.25, 1, true)
+fixedStructureDriftMH(circleOfDots, numsamps, 1, true, {}, 0.25)
 local t22 = os.clock()
 
 print(string.format("Uncompiled: %g", (t12 - t11)))

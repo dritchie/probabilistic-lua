@@ -133,6 +133,14 @@ function M.inheritsFrom(child, parent)
 	return false
 end
 
+function M.guardedTerraRequire(filename)
+	if terralib then
+		return terralib.require(filename)
+	else
+		return nil
+	end
+end
+
 
 -- exports
 return M

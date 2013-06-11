@@ -1,5 +1,5 @@
 local util = require("probabilistic.util")
-local mt = require("probabilistic.mathtracing")
+local mt = terralib.require("probabilistic.mathtracing")
 local inf = require("probabilistic.inference")
 
 
@@ -225,28 +225,6 @@ function CompiledGaussianDriftKernel:compile(currTrace)
 	self.currStructuralSigs = sigs
 end
 
--- Callable object that, when passed to IRNode.traverse,
--- collects all non-random variable nodes
-local FindNonRandomVariablesVisitor =
-{
-	__call =
-	function(self, node)
-		if util.inheritsFrom(node, mt.IR.VarNode) and not node.isRandomVariable then
-			table.insert(self.vars, node)
-		end
-	end
-}
-
-function FindNonRandomVariablesVisitor:new()
-	local newobj =
-	{
-		vars = {}
-	}
-	setmetatable(newobj, self)
-	self.__index = self
-	return newobj
-end
-
 function CompiledGaussianDriftKernel:doCompile(currTrace)
 
 	-- Get the proposal bandwidth of each nonstructural
@@ -263,28 +241,21 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 
 	-- Turn on mathtracing and run traceupdate to
 	-- generate IR for the log probability expression
-	mt.setNumberType(double)
+	mt.setRealNumberType(double)
 	mt.on()
 	currTrace:traceUpdate(true)
 	mt.off()
 
-	-- Look for all non-random variables in the log prob expression
-	-- These will become additional parameters to our specialized step function
-	local visitor = FindNonRandomVariablesVisitor:new()
-	mt.IR.traverse(currTrace.logprob, visitor)
-	self.additionalParams = util.map(function(v) return v.name end, visitor.vars)
-
-	-- Generate a specialized logprob function that accepts each of these
-	-- as an additional argument
-	local fnargs = util.copytable(visitor.vars)
-	table.insert(fnargs, mt.IR.VarNode:new("vars", "double*"))
-	local fnname = string.format("logprob%s", tostring(symbol()))
-	local fn = mt.IR.FunctionDefinition:new(fnname, "double", fnargs, {currTrace.logprob})
-	local C = terralib.includecstring(string.format("#include <math.h>\n\n%s", fn:emitCode()))
+	-- Compile the log prob expression into a function and also get the
+	-- list of additional parameters expected by this function.
+	local fn = nil
+	local nonRandVars = nil
+	fn, nonRandVars = mt.compileLogProbExpression(currTrace.logprob)
+	self.additionalParams = util.map(function(v) return v.value.displayname end, nonRandVars)
 
 	-- Generate a specialized step function that accepts each of these
 	-- as an additional argument
-	self.currStepFn = self:genStepFunction(numVars, visitor.vars, C[fnname], bandwidths)
+	self.currStepFn = self:genStepFunction(numVars, nonRandVars, fn, bandwidths)
 
 	-- Restore original logprob value
 	currTrace.logprob = savedLP

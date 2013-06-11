@@ -1,6 +1,6 @@
 local trace = require("probabilistic.trace")
 local util = require("probabilistic.util")
-local mt = require("probabilistic.mathtracing")
+local mt = util.guardedTerraRequire("probabilistic.mathtracing")
 
 
 -- Compute the discrete distribution over the given computation
@@ -140,8 +140,8 @@ function LARJInterpolationTrace:new(trace1, trace2, alpha, annealingKernel)
 		trace2 = trace2,
 		annealingKernel = annealingKernel
 	}
-	if annealingKernel.usesMathtracing() then
-		newobj.alpha = mt.IR.VarNode:new("larjAnnealAlpha", double)
+	if mt and annealingKernel.usesMathtracing() then
+		newobj.alpha = mt.makeParameterNode("alpha", double)
 	else
 		newobj.alpha = alpha
 	end
