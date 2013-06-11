@@ -541,7 +541,7 @@ local function setupPrecompiledFuncTracing()
 		-- create a node here. Else, just call it normally
 		local numargs = select("#", ...)
 		for i=1,numargs do
-			if util.inherits(select(i, ...), IR.Node) then
+			if util.inheritsFrom(select(i, ...), IR.Node) then
 				return IR.CompiledFuncNode(fn, ...)
 			end
 		end
@@ -558,12 +558,14 @@ local gmath = nil
 local _on = false
 local function on()
 	_on = true
+	setupPrecompiledFuncTracing()
 	randomVarsNode = IR.VarNode:new(symbol(&realnumtype, "vars"))
 	gmath = math
 	_G["math"] = irmath
 end
 local function off()
 	_on = false
+	teardownPrecompiledFuncTracing()
 	_G["math"] = gmath
 end
 local function isOn()
@@ -610,9 +612,13 @@ local function compileLogProbExpression(expr)
 	local fnname = string.format("logprob%s", tostring(symbol()))
 	local fn = IR.FunctionDefinition:new(fnname, realnumtype, fnargs, expr)
 
+	--print(fn:emitCCode())
+
 	-- Uncomment the next two lines to use C instead of Terra.
-	--local C = terralib.includecstring(string.format("#include <math.h>\n\n%s", fn:emitCCode()))
-	--return C[fnname], nonRandVars
+	-- local C = terralib.includecstring(string.format("#include <math.h>\n\n%s", fn:emitCCode()))
+	-- return C[fnname], nonRandVars
+
+	--print(fn:emitTerraCode():printpretty())
 
 	return fn:emitTerraCode(), nonRandVars
 end
