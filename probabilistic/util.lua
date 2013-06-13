@@ -2,8 +2,6 @@
 local M = {}
 
 
--- map(function, table)
--- e.g: map(double, {1,2,3})    -> {2,4,6}
 function M.map(func, tbl)
 	local newtbl = {}
 	for i,v in pairs(tbl) do
@@ -12,8 +10,6 @@ function M.map(func, tbl)
 	return newtbl
 end
 
--- filter(function, table)
--- e.g: filter(is_even, {1,2,3,4}) -> {2,4}
 function M.filter(func, tbl)
 	local newtbl= {}
 	for i,v in pairs(tbl) do

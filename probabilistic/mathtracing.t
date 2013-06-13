@@ -783,7 +783,7 @@ local function on()
 	_on = true
 	trace = IR.Block:new()
 	setupPrecompiledFuncTracing()
-	randomVarsNode = IR.VarNode:new(symbol(&realnumtype, "vars"))
+	randomVarsNode = IR.VarNode:new(symbol(&realnumtype))
 	gmath = math
 	_G["math"] = irmath
 end
