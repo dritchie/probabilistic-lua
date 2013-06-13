@@ -58,13 +58,27 @@ end
 
 local numsamps = 100000
 
+local res = nil
+
 local t11 = os.clock()
-LARJMH(circleOfDots, numsamps, 1, true, 0)
+--res = MAP(circleOfDots, LARJMH, numsamps, 1, true, 0)
 local t12 = os.clock()
 
 local t21 = os.clock()
-fixedStructureDriftMH(circleOfDots, numsamps, 1, true, {}, 0.25)
+res = MAP(circleOfDots, fixedStructureDriftMH, numsamps, 1, true, {}, 0.25)
 local t22 = os.clock()
 
 print(string.format("Uncompiled: %g", (t12 - t11)))
 print(string.format("Compiled: %g", (t22 - t21)))
+
+
+local function saveDotCSV(points, filename)
+	local f = io.open(filename, "w")
+	f:write("dotnum,x,y\n")
+	for i,p in ipairs(points) do
+		f:write(string.format("%u,%g,%g\n", i, p.x, p.y))
+	end
+	f:close()
+end
+
+saveDotCSV(res, "dotvis/dots.csv")
