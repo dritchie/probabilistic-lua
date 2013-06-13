@@ -251,7 +251,7 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 	local fn = nil
 	local nonRandVars = nil
 	fn, nonRandVars = mt.compileLogProbExpression(currTrace.logprob)
-	self.additionalParams = util.map(function(v) return v.value.displayname end, nonRandVars)
+	self.additionalParams = util.map(function(v) return v:name() end, nonRandVars)
 
 	-- Generate a specialized step function that accepts each of these
 	-- as an additional argument

@@ -37,9 +37,9 @@ function IR.terraTypeToCType(type)
 end
 
 
--------------------------------------------------
---  Intermediate representation for arithmetic --
--------------------------------------------------
+-------------------------------------------------------
+--  Intermediate representation for arithmetic, etc. --
+-------------------------------------------------------
 
 IR.Node = {}
 
@@ -200,70 +200,32 @@ function IR.BinaryMathFuncNode:emitTerraCode()
 end
 
 
-IR.CompiledFuncNode = IR.Node:new()
-
-function IR.CompiledFuncNode:new(fn, arglist)
-	local newobj = IR.Node.new(self, fn)
-	for i,a in ipairs(arglist) do
-		arglist[i] = IR.nodify(a)
-	end
-	newobj.inputs = arglist
-	return newobj
-end
-
-function IR.CompiledFuncNode:__tostring(tablevel)
-	tablevel = tablevel or 0
-	local str = util.tabify(string.format("IR.CompiledFuncNode: %s\n", self.value.name), tablevel)
-	for i,a in ipairs(self.inputs) do
-		str = string.format("%s%s\n", str, a:__tostring(tablevel+1))
-	end
-	return str
-end
-
--- NOTE: This assumes the function is not overloaded (i.e. has a single definition)
-function IR.CompiledFuncNode:emitCCode()
-	-- Name the function via function pointer
-	local fnpointer = self.value.definitions[1]:getpointer()
-	local fntype = self.value.definitions[1]:gettype()
-	local fnpstr = string.format("%s(*)", IR.terraTypeToCType(fntype.returns[1]))
-	if table.getn(fntype.parameters) == 0 then
-		fnpstr = string.format("%s(void)", fnpstr)
-	else
-		fnpstr = string.format("%s(%s", fnpstr, IR.terraTypeToCType(fntype.parameters[1]))
-		for i=2,table.getn(fntype.parameters) do
-			fnpstr = string.format("%s,%s", fnpstr, IR.terraTypeToCType(fntype.parameters[i]))
-		end
-		fnpstr = string.format("%s)", fnpstr)
-	end
-	fnpstr = string.format("((%s)%u)", fnpstr, terralib.cast(uint64, fnpointer))
-	-- Then actually call it
-	local str = string.format("%s(%s,", fnpstr, self.inputs[1]:emitCCode())
-	for i=2,table.getn(self.inputs) do
-		str = string.format("%s,%s", str, self.inputs[i]:emitCCode())
-	end
-	return string.format("%s)", str)
-end
-
-function IR.CompiledFuncNode:emitTerraCode()
-	return `[self.value]([util.map(function(n) return n:emitTerraCode() end, self.inputs)])
-end
-
 
 -- These refer to variables that are either inputs to the overall trace function
 -- or intermediates created during CSE
 IR.VarNode = IR.Node:new()
 
-function IR.VarNode:new(symbol)
+function IR.VarNode:new(symbol, isNamedParameter)
+	assert(symbol.type)		-- C code generation requires we know the type of this variable
 	local newobj = IR.Node.new(self, symbol)
+	newobj.isNamedParameter = isNamedParameter
 	return newobj
 end
 
 function IR.VarNode:__tostring(tablevel)
-	return util.tabify(string.format("IR.VarNode: %s %s", tostring(self.value.type), self.value.displayname), tablevel)
+	return util.tabify(string.format("IR.VarNode: %s %s", tostring(self:type()), self:name()), tablevel)
+end
+
+function IR.VarNode:name()
+	return self.value.displayname or tostring(self.value)
+end
+
+function IR.VarNode:type()
+	return self.value.type
 end
 
 function IR.VarNode:emitCCode()
-	return self.value.displayname
+	return self:name()
 end
 
 function IR.VarNode:emitTerraCode()
@@ -293,19 +255,191 @@ function IR.ArraySubscriptNode:emitTerraCode()
 end
 
 
+
+
+--- End expressions / begin statements ---
+
+
+IR.CompiledFuncCall = IR.Node:new()
+
+function IR.CompiledFuncCall:new(fn, arglist)
+	local newobj = IR.Node.new(self, fn)
+	for i,a in ipairs(arglist) do
+		arglist[i] = IR.nodify(a)
+	end
+	newobj.inputs = arglist
+	return newobj
+end
+
+function IR.CompiledFuncCall:__tostring(tablevel)
+	tablevel = tablevel or 0
+	local str = util.tabify(string.format("IR.CompiledFuncCall: %s\n", self.value.name), tablevel)
+	for i,a in ipairs(self.inputs) do
+		str = string.format("%s%s\n", str, a:__tostring(tablevel+1))
+	end
+	return str
+end
+
+-- NOTE: This assumes the function is not overloaded (i.e. has a single definition)
+function IR.CompiledFuncCall:emitCCode()
+	-- Name the function via function pointer
+	local fnpointer = self.value.definitions[1]:getpointer()
+	local fntype = self.value.definitions[1]:gettype()
+	local fnpstr = string.format("%s(*)", IR.terraTypeToCType(fntype.returns[1]))
+	if table.getn(fntype.parameters) == 0 then
+		fnpstr = string.format("%s(void)", fnpstr)
+	else
+		fnpstr = string.format("%s(%s", fnpstr, IR.terraTypeToCType(fntype.parameters[1]))
+		for i=2,table.getn(fntype.parameters) do
+			fnpstr = string.format("%s,%s", fnpstr, IR.terraTypeToCType(fntype.parameters[i]))
+		end
+		fnpstr = string.format("%s)", fnpstr)
+	end
+	fnpstr = string.format("((%s)%u)", fnpstr, terralib.cast(uint64, fnpointer))
+	-- Then actually call it
+	local str = string.format("%s(%s,", fnpstr, self.inputs[1]:emitCCode())
+	for i=2,table.getn(self.inputs) do
+		str = string.format("%s,%s", str, self.inputs[i]:emitCCode())
+	end
+	return string.format("%s)", str)
+end
+
+function IR.CompiledFuncCall:emitTerraCode()
+	return `[self.value]([util.map(function(n) return n:emitTerraCode() end, self.inputs)])
+end
+
+
+-- Take an IR expression and turn it into a statement
+-- Useful for e.g. function calls with no return values
+IR.Statement = {}
+
+function IR.Statement:new(exp)
+	local newobj = 
+	{
+		exp = exp
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function IR.Statement:childNodes()
+	return {self.exp}
+end
+
+function IR.Statement:__tostring(tablevel)
+	tablevel = tablevel or 0
+	return util.tabify("IR.Statement:\n%", self.exp:__tostring(tablevel+1))
+end
+
+function IR.Statement:emitCCode()
+	return string.format("%s;", self.exp:emitCCode())
+end
+
+function IR.Statement:emitTerraCode()
+	return quote
+		[self.exp:emitTerraCode()]
+	end
+end
+
+
+-- The final statement in a function with return values
+IR.ReturnStatement = {}
+
+function IR.ReturnStatement:new(exp)
+	local newobj = 
+	{
+		exp = exp
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function IR.ReturnStatement:childNodes()
+	return {self.exp}
+end
+
+function IR.Statement:__tostring(tablevel)
+	tablevel = tablevel or 0
+	return util.tabify("IR.ReturnStatement:\n%", self.exp:__tostring(tablevel+1))
+end
+
+function IR.ReturnStatement:emitCCode()
+	return string.format("return %s;", self.exp:emitCCode())
+end
+
+function IR.ReturnStatement:emitTerraCode()
+	return quote
+		return [self.exp:emitTerraCode()]
+	end
+end
+
+
+-- A statement assigning expressions to variables
+IR.VarAssignmentStatement = {}
+
+function IR.VarAssignmentStatement:new(vars, exps)
+	local newobj = 
+	{
+		vars = vars,
+		exps = exps
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function IR.VarAssignmentStatement:childNodes()
+	return util.joinarrays(self.vars, self.exps)
+end
+
+function IR.VarAssignmentStatement:__tostring(tablevel)
+	tablevel = 0 or tablevel
+	local str = string.format("IR.VarAssignmentStatement:\n%s\n", util.tabify("Vars:", tablevel+1))
+	for i,v in ipairs(self.vars) do
+		str = string.format("%s%s", str, v:__tostring(tablevel+2))
+	end
+	str = string.format("%s%s\n", util.tabify("Exps:", tablevel+1))
+	for i,e in ipairs(self.exps) do
+		str = string.format("%s%s", str, e:__tostring(tablevel+2))
+	end
+	return s
+end
+
+function IR.VarAssignmentStatement:emitCCode()
+	-- This check will fail for function calls with multiple return values, which
+	-- C can't handle.
+	assert(table.getn(self.vars) == table.getn(self.exps))
+	-- We'll do one line for each, since C can't handle everything in one statment
+	local str = ""
+	for i,v in ipairs(self.vars) do
+		local e = self.exps[i]
+		str = string.format("%s%s %s = %s;\n", str, IR.terraTypeToCType(v:type()), v:emitCCode(), e:emitCCode())
+	end
+	return str
+end
+
+function IR.VarAssignmentStatement:emitTerraCode()
+	return quote
+		[self.vars] = [self.exps]
+	end
+end
+
+
 -- A list of IR statements can be wrapped into a function
 IR.FunctionDefinition = {}
 
--- 'args' is a list of IR.VarNodes representing numeric variables
--- 'body' is an IR expression
+-- 'args' is a list of IR.VarNodes
+-- 'bodylist' is a list of IR statements
 -- 'rettype' is a Terra type
-function IR.FunctionDefinition:new(name, rettype, args, body)
+function IR.FunctionDefinition:new(name, rettype, args, bodylist)
 	local newobj =
 	{
 		value = name,
 		rettype = rettype,
 		args = args,
-		body = body
+		bodylist = bodylist
 	}
 	setmetatable(newobj, self)
 	self.__index = self
@@ -313,7 +447,7 @@ function IR.FunctionDefinition:new(name, rettype, args, body)
 end
 
 function IR.FunctionDefinition:childNodes()
-	return util.joinarrays(args, {body})
+	return util.joinarrays(args, bodylist)
 end
 
 function IR.FunctionDefinition:__tostring(tablevel)
@@ -324,7 +458,10 @@ function IR.FunctionDefinition:__tostring(tablevel)
 	for i,a in ipairs(self.args) do
 		str = str .. string.format("%s\n", a:__tostring(tablevel+2))
 	end
-	str = str .. util.tabify(string.format("body:\n%s\n", self.body:__tostring(tablevel+2)), tablevel+1)
+	str = str .. util.tabify("body:\n", tablevel+1)
+	for i,s in ipairs(self.bodylist) do
+		str = str .. string.format("%s\n", s:__tostring(tablevel+2))
+	end
 	return str
 end
 
@@ -333,17 +470,22 @@ function IR.FunctionDefinition:emitCCode()
 	local numargs = table.getn(self.args)
 	for i,a in ipairs(self.args) do
 		local postfix = i == numargs and "" or ", "
-		str = string.format("%s%s %s%s", str, tostring(IR.terraTypeToCType(a.value.type)), a:emitCCode(), postfix)
+		str = string.format("%s%s %s%s", str, tostring(IR.terraTypeToCType(a:type())), a:emitCCode(), postfix)
 	end
-	str = string.format("%s)\n{\n    return %s;\n}\n", str, self.body:emitCCode())
+	str = string.format("%s)\n{\n", str)
+	for i,s in ipairs(self.bodylist) do
+		str = string.format("%s%s", str, util.tabify(s:emitCCode(), 1))
+	end
+	str = string.format("%s}\n", str)
 	return str
 end
 
 function IR.FunctionDefinition:emitTerraCode()
-	local arglist = util.map(function(node) return node.value end, self.args)
+	local arglist = util.map(function(node) return node:emitTerraCode() end, self.args)
+	local bodylist = util.map(function(statement) return statement:emitTerraCode() end, self.bodylist)
 	return
 		terra([arglist])
-			return [self.body:emitTerraCode()]
+			[bodylist]
 		end
 end
 
@@ -459,7 +601,6 @@ util.copytablemembers(operators, IR.BinaryOpNode)
 util.copytablemembers(operators, IR.UnaryMathFuncNode)
 util.copytablemembers(operators, IR.BinaryMathFuncNode)
 util.copytablemembers(operators, IR.ArraySubscriptNode)
-util.copytablemembers(operators, IR.CompiledFuncNode)
 
 -- Math functions --
 local irmath = 
@@ -542,7 +683,7 @@ local function setupPrecompiledFuncTracing()
 		local numargs = select("#", ...)
 		for i=1,numargs do
 			if util.inheritsFrom(select(i, ...), IR.Node) then
-				return IR.CompiledFuncNode(fn, ...)
+				return IR.CompiledFuncCall(fn, ...)
 			end
 		end
 		return terrafncall(fn, ...)
@@ -581,7 +722,7 @@ end
 -- Create an IR variable node corresponding to an inference
 -- hyperparameter named 'name' with Terra type 'type'
 local function makeParameterNode(name, type)
-	return IR.VarNode:new(symbol(type, name))
+	return IR.VarNode:new(symbol(type, name), true)
 end
 
 -- Find all the varaibles in the IR expression 'expr' that
@@ -592,7 +733,7 @@ local function findNonRandomVariables(expr)
 		vars = {},
 		__call =
 		function(self, node)
-			if util.inheritsFrom(node, IR.VarNode) and node ~= randomVarsNode then
+			if util.inheritsFrom(node, IR.VarNode) and node.isNamedParameter then
 				table.insert(self.vars, node)
 			end
 		end
@@ -610,7 +751,7 @@ local function compileLogProbExpression(expr)
 	local fnargs = util.copytable(nonRandVars)
 	table.insert(fnargs, randomVarsNode)
 	local fnname = string.format("logprob%s", tostring(symbol()))
-	local fn = IR.FunctionDefinition:new(fnname, realnumtype, fnargs, expr)
+	local fn = IR.FunctionDefinition:new(fnname, realnumtype, fnargs, {IR.ReturnStatement:new(expr)})
 
 	--print(fn:emitCCode())
 

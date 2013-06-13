@@ -464,8 +464,7 @@ if terralib then
 	customtest(
 		"compiled fixed-structure gaussian drift",
 		function()
-			local g = gaussian(0.1, 0.5)
-			return g
+			return gaussian(0.1, 0.5)
 		end,
 		0.1,
 		errorTolerance,
