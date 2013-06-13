@@ -249,13 +249,13 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 	-- Compile the log prob expression into a function and also get the
 	-- list of additional parameters expected by this function.
 	local fn = nil
-	local nonRandVars = nil
-	fn, nonRandVars = mt.compileLogProbExpression(currTrace.logprob)
-	self.additionalParams = util.map(function(v) return v:name() end, nonRandVars)
+	local paramVars = nil
+	fn, paramVars = mt.compileLogProbTrace(currTrace.logprob)
+	self.additionalParams = util.map(function(v) return v:name() end, paramVars)
 
 	-- Generate a specialized step function that accepts each of these
 	-- as an additional argument
-	self.currStepFn = self:genStepFunction(numVars, nonRandVars, fn, bandwidths)
+	self.currStepFn = self:genStepFunction(numVars, paramVars, fn, bandwidths)
 
 	-- Restore original logprob value
 	currTrace.logprob = savedLP
@@ -285,9 +285,9 @@ local terra gaussian_sample(mu : double, sigma: double) : double
 	return mu + sigma*v/u
 end
 
-function CompiledGaussianDriftKernel:genStepFunction(numVars, nonRandVars, lpfn, bandwidths)
+function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, bandwidths)
 	-- Additional argument list
-	local arglist = util.map(function(v) return symbol(v.type) end, nonRandVars)
+	local arglist = util.map(function(v) return symbol(v.type) end, paramVars)
 
 	-- The overall function expression
 	return 
