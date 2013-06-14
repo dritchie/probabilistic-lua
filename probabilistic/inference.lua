@@ -154,14 +154,29 @@ function LARJInterpolationTrace:freeVarNames(structural, nonstructural)
 	nonstructural = (nonstructural == nil) and true or nonstructural
 	local fv1 = self.trace1:freeVarNames(structural, nonstructural)
 	local fv2 = self.trace2:freeVarNames(structural, nonstructural)
-	local set = {}
-	for i,name in ipairs(fv1) do
-		set[name] = true
+	local fvall = {}
+	local seenset = {}
+	local biggestn = math.min(table.getn(fv1), table.getn(fv2))
+	for i=1,biggestn do
+		local n1 = fv1[i]
+		local n2 = fv2[i]
+		if not n1 then
+			if not seenset[n2] then table.insert(fvall, n2) end
+		elseif not n2 then
+			if not seenset[n1] then table.insert(fvall, n1) end
+		elseif n1 < n2 then
+			if not seenset[n1] then table.insert(fvall, n1) end
+			if not seenset[n2] then table.insert(fvall, n2) end
+		elseif n1 > n2 then
+			if not seenset[n2] then table.insert(fvall, n2) end
+			if not seenset[n1] then table.insert(fvall, n1) end
+		else
+			if not seenset[n1] then table.insert(fvall, n1) end
+		end
+		if n1 then seenset[n1] = true end
+		if n2 then seenset[n2] = true end
 	end
-	for i,name in ipairs(fv2) do
-		set[name] = true
-	end
-	return util.keys(set)
+	return fvall
 end
 
 function LARJInterpolationTrace:hasVar(name)

@@ -75,14 +75,15 @@ end
 function RandomExecutionTrace:freeVarNames(structural, nonstructural)
 	structural = (structural == nil) and true or structural
 	nonstructural = (nonstructural == nil) and true or nonstructural
-	return util.keys(
-		util.filter(
+	return util.map(
+		function(rec) return rec.name end,
+		util.listfilter(
 			function(rec)
 				return not rec.conditioned and
 						((structural and rec.structural) or
 						(nonstructural and not rec.structural))
 			end,
-			self.vars))
+			self.varlist))
 end
 
 -- Names of variables that this trace has that the other does not

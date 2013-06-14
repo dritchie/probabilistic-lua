@@ -4,17 +4,27 @@ local M = {}
 
 function M.map(func, tbl)
 	local newtbl = {}
-	for i,v in pairs(tbl) do
-		newtbl[i] = func(v)
+	for k,v in pairs(tbl) do
+		newtbl[k] = func(v)
 	end
 	return newtbl
 end
 
-function M.filter(func, tbl)
+function M.filter(pred, tbl)
 	local newtbl= {}
-	for i,v in pairs(tbl) do
-		if func(v) then
-			newtbl[i]=v
+	for k,v in pairs(tbl) do
+		if pred(v) then
+			newtbl[k]=v
+		end
+	end
+	return newtbl
+end
+
+function M.listfilter(pred, arr)
+	local newtbl = {}
+	for i,v in ipairs(arr) do
+		if pred(v) then
+			table.insert(newtbl, v)
 		end
 	end
 	return newtbl
