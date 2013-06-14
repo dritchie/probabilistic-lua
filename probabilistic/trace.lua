@@ -297,12 +297,14 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 	self.logprob = self.logprob + record.logprob
 	record.active = true
 
+	local retval = record.val
+
 	-- If we're in mathtracing mode, we need to restore the original value
 	if mt and mt.isOn() and not isStructural then
 		record.val = record.__val
 	end
 
-	return record.val
+	return retval
 
 end
 
