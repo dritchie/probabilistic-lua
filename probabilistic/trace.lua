@@ -268,8 +268,7 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 		-- then we want to recompute the log prob for a var node
 		if mt and mt.isOn() and not isStructural then
 			record.__val = record.val
-			-- (currVarIndex - 1) because Terra and C use 0-based-indexing
-			record.val = mt.makeRandomVariableNode(self.currVarIndex-1)
+			record.val = mt.makeRandomVariableNode(record.name)
 			hasChanges = true
 		end
 

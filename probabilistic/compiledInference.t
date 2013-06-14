@@ -242,9 +242,7 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 	-- Turn on mathtracing and run traceupdate to
 	-- generate IR for the log probability expression
 	mt.setRealNumberType(double)
-	mt.on()
-	currTrace:traceUpdate(true)
-	mt.off()
+	mt.traceTraceUpdate(currTrace)
 
 	-- Compile the log prob expression into a function and also get the
 	-- list of additional parameters expected by this function.

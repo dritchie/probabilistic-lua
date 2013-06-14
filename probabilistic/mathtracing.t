@@ -694,7 +694,7 @@ addWrappedBinaryFuncs(irmath, {
 -- Publicly visible functionality --
 ------------------------------------
 
--- A global block that forms the current trace through the program
+-- A statement block that forms the current trace through the program
 local trace = nil
 
 -- An IR expression which represents the array of random variable
@@ -712,9 +712,10 @@ end
 
 
 -- Create an IR node corresponding to a random variable with
--- index 'index' in the flat list of trace variables
-local function makeRandomVariableNode(index)
-	return IR.ArraySubscriptNode:new(index, randomVarsNode)
+-- the name 'name'
+local name2index = nil
+local function makeRandomVariableNode(name)
+	return IR.ArraySubscriptNode:new(name2index[name], randomVarsNode)
 end
 
 -- Create an IR variable node corresponding to an inference
@@ -796,6 +797,22 @@ local function isOn()
 	return _on
 end
 
+-- Wrapping up details about tracing over fixed-structure probabilistic
+-- program executions into a single function
+local function traceTraceUpdate(probTrace)
+	-- First, extract and save a consistent ordering of the
+	-- random variables
+	name2index = {}
+	local nonStructNames = probTrace:freeVarNames(false, true)
+	for i,n in ipairs(nonStructNames) do
+		name2index[n] = i-1
+	end
+	-- Now do the actual work
+	on()
+	probTrace:traceUpdate(true)
+	off()
+end
+
 -- Find all the named parameter varaibles that occur in an IR
 local function findNamedParameters(root)
 	local visitor = 
@@ -875,6 +892,7 @@ return
 	on = on,
 	off = off,
 	isOn = isOn,
+	traceTraceUpdate = traceTraceUpdate,
 	realNumberType = realNumberType,
 	setRealNumberType = setRealNumberType,
 	makeRandomVariableNode = makeRandomVariableNode,
