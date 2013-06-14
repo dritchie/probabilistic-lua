@@ -4,7 +4,7 @@ util = require("probabilistic.util")
 erp = require("probabilistic.erp")
 util.openpackage(pr)
 
-function circleOfDots()
+function circleOfDots(numDots)
 
 	-- helpers
 	local function norm(v)
@@ -22,7 +22,6 @@ function circleOfDots()
 	end
 
 	-- params
-	local numDots = 6
 	local gmean = 0
 	local gsd = 2
 	local targetdist = 0.5
@@ -54,18 +53,33 @@ function circleOfDots()
 	return points
 end
 
+function makeCircleOfDots(numDots)
+	return function()
+		return circleOfDots(numDots)
+	end
+end
+
+function transDimensionalCircleOfDots()
+	local dims = {4, 5, 6, 7, 8}
+	local numDots = uniformDraw(dims, true)
+	return circleOfDots(numDots)
+end
+
 -----------
 
 local numsamps = 100000
+local fixedNumDots = 6
 
 local res = nil
 
 local t11 = os.clock()
---res = MAP(circleOfDots, LARJMH, numsamps, 1, true, 0)
+--res = MAP(makeCircleOfDots(fixedNumDots), LARJMH, numsamps, 1, true, 0)
+--res = MAP(transDimensionalCircleOfDots, LARJMH, numsamps, 1, true, 0)
 local t12 = os.clock()
 
 local t21 = os.clock()
-res = MAP(circleOfDots, fixedStructureDriftMH, numsamps, 1, true, {}, 0.25)
+--res = MAP(makeCircleOfDots(fixedNumDots), fixedStructureDriftMH, numsamps, 1, true, {}, 0.25)
+res = MAP(transDimensionalCircleOfDots, LARJDriftMH, numsamps, 1, true, 0, nil, {}, 0.25)
 local t22 = os.clock()
 
 print(string.format("Uncompiled: %g", (t12 - t11)))

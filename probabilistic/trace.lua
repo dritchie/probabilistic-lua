@@ -264,15 +264,6 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 		record.annotation = annotation
 		record.conditioned = (conditionedValue ~= nil)
 		local hasChanges = false
-
-		-- If we're in mathtracing mode and this is a nonstructural variable,
-		-- then we want to recompute the log prob for a var node
-		if mt and mt.isOn() and not isStructural then
-			record.__val = record.val
-			record.val = mt.makeRandomVariableNode(record.name)
-			hasChanges = true
-		end
-
 		-- If params have changed, we need to recompute log prob
 		if not util.arrayequals(record.params, params) then
 			record.params = params
@@ -287,6 +278,8 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 		if hasChanges then
 			record.logprob = erp:logprob(record.val, params)
 		end
+		-- If we're doing tracing JIT, then we might need to modify this record
+		if mt then mt.modifyVarRecord(record) end
 	end
 
 	-- Final bookkeeping
@@ -299,10 +292,8 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 
 	local retval = record.val
 
-	-- If we're in mathtracing mode, we need to restore the original value
-	if mt and mt.isOn() and not isStructural then
-		record.val = record.__val
-	end
+	-- If we're doing tracing JIT, then we should restore this record to its original state
+	if mt then mt.restoreVarRecord(record) end
 
 	return retval
 

@@ -460,6 +460,8 @@ return
 	expectation = expectation,
 	MAP = MAP,
 	rejectionSample = rejectionSample,
+	RandomWalkKernel = RandomWalkKernel,
+	LARJKernel = LARJKernel,
 	mcmc = mcmc,
 	traceMH = traceMH,
 	LARJMH = LARJMH

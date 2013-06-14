@@ -813,6 +813,24 @@ local function traceTraceUpdate(probTrace)
 	off()
 end
 
+-- Modify a random variable record for mathtracing
+local function modifyVarRecord(record)
+	if isOn() and not record.structural then
+		record.__val = record.val
+		record.val = makeRandomVariableNode(record.name)
+		record.__logprob = record.logprob
+		record.logprob = record.erp:logprob(record.val, record.params)
+	end
+end
+
+-- Undo mathtracing modifications to a random variable record
+local function restoreVarRecord(record)
+	if isOn() and not record.structural then
+		record.val = record.__val
+		record.logprob = record.__logprob
+	end
+end
+
 -- Find all the named parameter varaibles that occur in an IR
 local function findNamedParameters(root)
 	local visitor = 
@@ -893,9 +911,10 @@ return
 	off = off,
 	isOn = isOn,
 	traceTraceUpdate = traceTraceUpdate,
+	modifyVarRecord = modifyVarRecord,
+	restoreVarRecord = restoreVarRecord,
 	realNumberType = realNumberType,
 	setRealNumberType = setRealNumberType,
-	makeRandomVariableNode = makeRandomVariableNode,
 	makeParameterNode = makeParameterNode,
 	compileLogProbTrace = compileLogProbTrace,
 	compileTrace = compileTrace

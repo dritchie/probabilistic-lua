@@ -324,9 +324,20 @@ local function fixedStructureDriftMH(computation, numsamps, lag, verbose, bandwi
 					numsamps, lag, verbose)
 end
 
+-- Sample from a probabilistic computation using LARJMCMC, with an
+-- inner kernel that runs compiled Gaussian drift MH
+local function LARJDriftMH(computation, numsamps, lag, verbose, annealSteps, jumpFreq, bandwidthMap, defaultBandwidth, cacheSize)
+	lag = (lag == nil) and 1 or lag
+	return inf.mcmc(computation,
+					inf.LARJKernel:new(
+						CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSize),
+						annealSteps, jumpFreq),
+					numsamps, lag, verbose)
+end
 
 -- Module exports
 return
 {
-	fixedStructureDriftMH = fixedStructureDriftMH	
+	fixedStructureDriftMH = fixedStructureDriftMH,
+	LARJDriftMH = LARJDriftMH
 }
