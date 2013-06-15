@@ -150,9 +150,6 @@ function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSi
 		currStepFn = nil,
 		compileCache = CompiledTraceCache:new(cacheSize),
 
-		-- Additional parameters expected by the step function
-		additionalParams = {},
-
 		-- Analytics
 		proposalsMade = 0,
 		proposalsAccepted = 0
@@ -162,16 +159,11 @@ function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSi
 	return newobj
 end
 
-function CompiledGaussianDriftKernel:usesMathtracing()
-	return true
-end
-
 function CompiledGaussianDriftKernel:assumeControl(currTrace)
 	-- Translate trace into internal state
 	local currState = CompiledTraceState:new(currTrace)
 
 	-- Check for structure change/need recompile
-	-- TODO: Implement caching of compiled traces??
 	self:compile(currTrace)
 
 	return currState
@@ -182,26 +174,21 @@ function CompiledGaussianDriftKernel:releaseControl(currState)
 	local newTrace = currState.trace:deepcopy()
 
 	-- Copy the var values and logprob back into the trace
-	newTrace.logprob = currState.logprob
 	local nonStructVars = newTrace:freeVarNames(false, true)
 	for i,n in ipairs(nonStructVars) do
 		newTrace:setVarProp(n, "val", currState.varVals[i-1])
 	end
+	newTrace:setLogProb(currState.logprob)
 	return newTrace
 end
 
-function CompiledGaussianDriftKernel:next(currState)
+function CompiledGaussianDriftKernel:next(currState, hyperparams)
 	-- Create a new state to transition to
 	local newState = CompiledTraceState:new(currState.trace, currState)
 
-	-- Prepare the additional arguments expected by the step function
-	-- We assume that the values for these arguments have been added to this
-	-- object under the correct names.
-	local additionalArgs = util.map(function(param) return currState[param] end, self.additionalParams)
-
 	-- Call the step function to advance the state
-	local newlp, accepted = self.currStepFn(newState.varVals, currState.logprob, unpack(additionalArgs))
-	newState.logprob = newlp
+	local accepted = false
+	newState.logprob, accepted = self.currStepFn(newState, hyperparams)
 
 	-- Update analytics and continue
 	self.proposalsMade = self.proposalsMade + 1
@@ -236,27 +223,17 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 		bandwidths[i-1] = self.bandwidthMap[ann] or self.defaultBandwidth
 	end
 
-	-- Save current logprob value, as we're about to clobber it
-	local savedLP = currTrace.logprob
-
 	-- Turn on mathtracing and run traceupdate to
 	-- generate IR for the log probability expression
-	mt.setRealNumberType(double)
-	mt.traceTraceUpdate(currTrace)
-
 	-- Compile the log prob expression into a function and also get the
 	-- list of additional parameters expected by this function.
+	mt.setRealNumberType(double)
 	local fn = nil
 	local paramVars = nil
-	fn, paramVars = mt.compileLogProbTrace(currTrace.logprob)
-	self.additionalParams = util.map(function(v) return v:name() end, paramVars)
+	fn, paramVars = mt.compileLogProbTrace(currTrace)
 
-	-- Generate a specialized step function that accepts each of these
-	-- as an additional argument
+	-- Generate a specialized step function
 	self.currStepFn = self:genStepFunction(numVars, paramVars, fn, bandwidths)
-
-	-- Restore original logprob value
-	currTrace.logprob = savedLP
 end
 
 
@@ -285,10 +262,10 @@ end
 
 function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, bandwidths)
 	-- Additional argument list
-	local arglist = util.map(function(v) return symbol(v.type) end, paramVars)
+	local arglist = util.map(function(v) return v.value end, paramVars)
 
-	-- The overall function expression
-	return 
+	-- The compiled Terra function
+	local step = 
 		terra(vals: &double, currLP: double, [arglist])
 			-- Pick a random variable
 			var i = [int](cstdlib.random() * [numVars])
@@ -307,6 +284,13 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 				return currLP, false
 			end
 		end
+
+	-- A Lua wrapper around the Terra function that calls it with the appropriate
+	-- additional hyperparameters
+	return function(state, hyperparams)
+		local additionalArgs = util.map(function(pvar) return hyperparams[pvar:name()]:getValue() end, paramVars)
+		return step(state.varVals, state.logprob, unpack(additionalArgs))
+	end
 end
 
 function CompiledGaussianDriftKernel:stats()

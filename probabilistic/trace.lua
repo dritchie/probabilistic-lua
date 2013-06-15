@@ -132,6 +132,10 @@ function RandomExecutionTrace:toggleFactorEval(switch)
 	self.evaluatingFactorThunks = switch
 end
 
+function RandomExecutionTrace:setLogProb(newlp)
+	self.logprob = newlp
+end
+
 -- The singleton trace object
 local trace = nil
 
@@ -263,23 +267,27 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 	else
 		record.annotation = annotation
 		record.conditioned = (conditionedValue ~= nil)
-		local hasChanges = false
-		-- If params have changed, we need to recompute log prob
-		if not util.arrayequals(record.params, params) then
-			record.params = params
-			hasChanges = true
+		-- If we're JITing this computation, then we have different logic to follow
+		if mt and mt.isOn() and not isStructural then
+			mt.traceNonstructuralVariable(record)
+		-- Otherwise, proceed normally
+		else
+			local hasChanges = false
+			-- If params have changed, we need to recompute log prob
+			if not util.arrayequals(record.params, params) then
+				record.params = params
+				hasChanges = true
+			end
+			-- If the conditioned value has changed, we also need to recompute log prob
+			if conditionedValue and conditionedValue ~= record.val then
+				record.val = conditionedValue
+				record.conditioned = true
+				hasChanges = true
+			end
+			if hasChanges then
+				record.logprob = erp:logprob(record.val, params)
+			end
 		end
-		-- If the conditioned value has changed, we also need to recompute log prob
-		if conditionedValue and conditionedValue ~= record.val then
-			record.val = conditionedValue
-			record.conditioned = true
-			hasChanges = true
-		end
-		if hasChanges then
-			record.logprob = erp:logprob(record.val, params)
-		end
-		-- If we're doing tracing JIT, then we might need to modify this record
-		if mt then mt.modifyVarRecord(record) end
 	end
 
 	-- Final bookkeeping
@@ -289,14 +297,7 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 	self.currVarIndex = self.currVarIndex + 1
 	self.logprob = self.logprob + record.logprob
 	record.active = true
-
-	local retval = record.val
-
-	-- If we're doing tracing JIT, then we should restore this record to its original state
-	if mt then mt.restoreVarRecord(record) end
-
-	return retval
-
+	return record.val
 end
 
 -- Does this trace have the variable named 'name'?

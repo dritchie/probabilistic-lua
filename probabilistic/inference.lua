@@ -57,6 +57,38 @@ local function rejectionSample(computation)
 end
 
 
+-- A hyperparameter for an MCMC kernel
+-- A name/value table of these may be passed to any kernel:next()
+-- Certain kernels may expect/require certain hyperparameters
+-- For JITed traces, hyperparameters used anywhere in the logprob
+-- calculation *must* be provided via kernel:next() for the kernel
+--   to know their values.
+local HyperParam = {}
+
+function HyperParam:new(name, value)
+	local newobj = 
+	{
+		name = name,
+		value = value
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function HyperParam:setValue(newval)
+	self.value = newval
+end
+
+function HyperParam:getValue()
+	if mt and mt.isOn() then
+		return mt.getParameterNode(self.name, double)
+	else
+		return self.value
+	end
+end
+
+
 -- MCMC transition kernel that takes random walks by tweaking a
 -- single variable at a time
 local RandomWalkKernel = {}
@@ -75,15 +107,11 @@ function RandomWalkKernel:new(structural, nonstructural)
 	return newobj
 end
 
-function RandomWalkKernel:usesMathtracing()
-	return false
-end
-
 function RandomWalkKernel:assumeControl(currTrace)
 	return currTrace
 end
 
-function RandomWalkKernel:next(currTrace)
+function RandomWalkKernel:next(currTrace, hyperparams)
 	self.proposalsMade = self.proposalsMade + 1
 	local name = util.randomChoice(currTrace:freeVarNames(self.structural, self.nonstructural))
 
@@ -123,7 +151,10 @@ end
 -- Abstraction for the linear interpolation of two execution traces
 local LARJInterpolationTrace = {
 	properties = {
-		logprob = function(self) return (1-self.alpha)*self.trace1.logprob + self.alpha*self.trace2.logprob end,
+		logprob = function(self)
+			local a = self.alpha:getValue()
+			return (1-a)*self.trace1.logprob + a*self.trace2.logprob
+		end,
 		conditionsSatisfied = function(self) return self.trace1.conditionsSatisfied and self.trace2.conditionsSatisfied end,
 		returnValue = function(self) return trace2.returnValue end
 	}
@@ -134,17 +165,13 @@ function LARJInterpolationTrace:__index(key)
 	return v ~= nil and v or LARJInterpolationTrace.properties[key](self)
 end
 
-function LARJInterpolationTrace:new(trace1, trace2, alpha, annealingKernel)
+function LARJInterpolationTrace:new(trace1, trace2, alpha)
+	alpha = alpha or HyperParam:new("alpha", 0)
 	local newobj = {
 		trace1 = trace1,
 		trace2 = trace2,
-		annealingKernel = annealingKernel
+		alpha = alpha,
 	}
-	if mt and annealingKernel.usesMathtracing() then
-		newobj.alpha = mt.makeParameterNode("alpha", double)
-	else
-		newobj.alpha = alpha
-	end
 	setmetatable(newobj, self)
 	return newobj
 end
@@ -156,7 +183,7 @@ function LARJInterpolationTrace:freeVarNames(structural, nonstructural)
 	local fv2 = self.trace2:freeVarNames(structural, nonstructural)
 	local fvall = {}
 	local seenset = {}
-	local biggestn = math.min(table.getn(fv1), table.getn(fv2))
+	local biggestn = math.max(table.getn(fv1), table.getn(fv2))
 	for i=1,biggestn do
 		local n1 = fv1[i]
 		local n2 = fv2[i]
@@ -209,7 +236,7 @@ function LARJInterpolationTrace:setVarProp(name, prop, val)
 end
 
 function LARJInterpolationTrace:deepcopy()
-	return LARJInterpolationTrace:new(self.trace1:deepcopy(), self.trace2:deepcopy(), self.alpha, self.annealingKernel)
+	return LARJInterpolationTrace:new(self.trace1:deepcopy(), self.trace2:deepcopy(), self.alpha)
 end
 
 function LARJInterpolationTrace:structuralSignatures()
@@ -221,6 +248,12 @@ end
 function LARJInterpolationTrace:toggleFactorEval(switch)
 	self.trace1:toggleFactorEval(switch)
 	self.trace2:toggleFactorEval(switch)
+end
+
+function LARJInterpolationTrace:setLogProb(newlp)
+	local a = self.alpha:getValue()
+	self.trace1:setLogProb((1-a)*newlp)
+	self.trace2:setLogProb(a*newlp)
 end
 
 function LARJInterpolationTrace:traceUpdate(structureIsFixed)
@@ -277,10 +310,6 @@ function LARJKernel:new(diffusionKernel, annealSteps, jumpFreq)
 	return newobj
 end
 
-function LARJKernel:usesMathtracing()
-	return false
-end
-
 function LARJKernel:updateCurrentTraceData(currTrace)
 	self.currentNumStruct = table.getn(currTrace:freeVarNames(true, false))
 	self.currentNumNonStruct = table.getn(currTrace:freeVarNames(false, true))
@@ -292,7 +321,7 @@ function LARJKernel:assumeControl(currTrace)
 	return currTrace
 end
 
-function LARJKernel:next(currState)
+function LARJKernel:next(currState, hyperparams)
 	if not self.isDiffusing then
 		self:updateCurrentTraceData(currState)
 		-- If we have no free random variables, then just run the computation
@@ -354,7 +383,9 @@ function LARJKernel:jumpStep(currTrace)
 	local annealingLpRatio = 0
 	if table.getn(oldStructTrace:freeVarNames(false, true)) + table.getn(newStructTrace:freeVarNames(false, true)) ~= 0
 		and self.annealSteps > 0 then
-		local lerpTrace = LARJInterpolationTrace:new(oldStructTrace, newStructTrace, 0, self.diffusionKernel)
+		local lerpTrace = LARJInterpolationTrace:new(oldStructTrace, newStructTrace)
+		local hyperparams = {}
+		hyperparams[lerpTrace.alpha.name] = lerpTrace.alpha
 		local prevAccepted = self.diffusionKernel.proposalsAccepted
 
 		lerpTrace = self:releaseControl(lerpTrace)
@@ -362,9 +393,9 @@ function LARJKernel:jumpStep(currTrace)
 		self.isDiffusing = true
 
 		for aStep=0,self.annealSteps-1 do
-			lerpState.alpha = aStep/(self.annealSteps-1)
+			lerpTrace.alpha:setValue(aStep/(self.annealSteps-1))
 			annealingLpRatio = annealingLpRatio + lerpState.logprob
-			lerpState = self.diffusionKernel:next(lerpState)
+			lerpState = self.diffusionKernel:next(lerpState, hyperparams)
 			annealingLpRatio = annealingLpRatio - lerpState.logprob
 		end
 

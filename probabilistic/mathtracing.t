@@ -718,10 +718,16 @@ local function makeRandomVariableNode(name)
 	return IR.ArraySubscriptNode:new(name2index[name], randomVarsNode)
 end
 
--- Create an IR variable node corresponding to an inference
+-- Retrieve (or create) an IR variable node corresponding to an inference
 -- hyperparameter named 'name' with Terra type 'type'
-local function makeParameterNode(name, type)
-	return IR.VarNode:new(symbol(type, name))
+local hyperparams = nil
+local function getParameterNode(name, type)
+	local node = hyperparams[name]
+	if not node then
+		node = IR.VarNode:new(symbol(type, name))
+		hyperparams[name] = node
+	end
+	return node
 end
 
 -- Create an IR variable node which holds an intermediate result
@@ -782,6 +788,7 @@ local gmath = nil
 local _on = false
 local function on()
 	_on = true
+	hyperparams = {}
 	trace = IR.Block:new()
 	setupPrecompiledFuncTracing()
 	randomVarsNode = IR.VarNode:new(symbol(&realnumtype))
@@ -797,38 +804,11 @@ local function isOn()
 	return _on
 end
 
--- Wrapping up details about tracing over fixed-structure probabilistic
--- program executions into a single function
-local function traceTraceUpdate(probTrace)
-	-- First, extract and save a consistent ordering of the
-	-- random variables
-	name2index = {}
-	local nonStructNames = probTrace:freeVarNames(false, true)
-	for i,n in ipairs(nonStructNames) do
-		name2index[n] = i-1
-	end
-	-- Now do the actual work
-	on()
-	probTrace:traceUpdate(true)
-	off()
-end
-
--- Modify a random variable record for mathtracing
-local function modifyVarRecord(record)
-	if isOn() and not record.structural then
-		record.__val = record.val
-		record.val = makeRandomVariableNode(record.name)
-		record.__logprob = record.logprob
-		record.logprob = record.erp:logprob(record.val, record.params)
-	end
-end
-
--- Undo mathtracing modifications to a random variable record
-local function restoreVarRecord(record)
-	if isOn() and not record.structural then
-		record.val = record.__val
-		record.logprob = record.__logprob
-	end
+-- Trace the access to a nonstructural random variable
+local function traceNonstructuralVariable(record)
+	assert(isOn() and not record.structural)
+	record.val = makeRandomVariableNode(record.name)
+	record.logprob = record.erp:logprob(record.val, record.params)
 end
 
 -- Find all the named parameter varaibles that occur in an IR
@@ -848,15 +828,28 @@ local function findNamedParameters(root)
 	return visitor.vars
 end
 
--- Compile a recorded trace which represents a log probability computation.
--- 'expr' is an expression to use as the return value of the compiled function
+-- Record and compile a trace of a log probability computation.
 -- Returns a compiled function, followed by all of the parameter
 --   variables found in the recorded trace.
-local function compileLogProbTrace(expr)
+local function compileLogProbTrace(probTrace)
+	-- First, extract and save a consistent ordering of the
+	-- random variables
+	name2index = {}
+	local nonStructNames = probTrace:freeVarNames(false, true)
+	for i,n in ipairs(nonStructNames) do
+		name2index[n] = i-1
+	end
+	-- Now trace
+	local traceCopy = probTrace:deepcopy()	-- since tracing clobbers a bunch of stuff
+	on()
+	traceCopy:traceUpdate(true)
+	off()
+	local expr = traceCopy.logprob
+	-- Now do compilation
 	table.insert(trace.statements, IR.ReturnStatement:new(expr))
 	local params = findNamedParameters(trace)
-	local fnargs = util.copytable(params)
-	table.insert(fnargs, randomVarsNode)
+	local fnargs = {randomVarsNode}
+	util.appendarray(params, fnargs)
 	local fnname = tostring(symbol())
 	local fn = IR.FunctionDefinition:new(fnname, realnumtype, fnargs, trace)
 
@@ -910,12 +903,10 @@ return
 	on = on,
 	off = off,
 	isOn = isOn,
-	traceTraceUpdate = traceTraceUpdate,
-	modifyVarRecord = modifyVarRecord,
-	restoreVarRecord = restoreVarRecord,
+	traceNonstructuralVariable = traceNonstructuralVariable,
 	realNumberType = realNumberType,
 	setRealNumberType = setRealNumberType,
-	makeParameterNode = makeParameterNode,
+	getParameterNode = getParameterNode,
 	compileLogProbTrace = compileLogProbTrace,
 	compileTrace = compileTrace
 }
