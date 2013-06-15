@@ -65,11 +65,12 @@ end
 --   to know their values.
 local HyperParam = {}
 
-function HyperParam:new(name, value)
+function HyperParam:new(value)
+	assert(type(value) == "number")
 	local newobj = 
 	{
-		name = name,
-		value = value
+		value = value,
+		__value = mt.makeParameterNode(double)
 	}
 	setmetatable(newobj, self)
 	self.__index = self
@@ -82,10 +83,37 @@ end
 
 function HyperParam:getValue()
 	if mt and mt.isOn() then
-		return mt.getParameterNode(self.name, double)
+		return self.__value
 	else
 		return self.value
 	end
+end
+
+function HyperParam:name()
+	return self.__value:name()
+end
+
+local HyperParamTable = {}
+
+function HyperParamTable:new()
+	local newobj = {}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function HyperParamTable:add(hyperparam)
+	self[hyperparam.__value:name()] = hyperparam
+end
+
+function HyperParamTable:remove(hyperparam)
+	self[hyperparam.__value:name()] = nil
+end
+
+function HyperParamTable:copy()
+	local newtable = HyperParamTable:new()
+	util.copytablemembers(self, newtable)
+	return newtable
 end
 
 
@@ -166,7 +194,7 @@ function LARJInterpolationTrace:__index(key)
 end
 
 function LARJInterpolationTrace:new(trace1, trace2, alpha)
-	alpha = alpha or HyperParam:new("alpha", 0)
+	alpha = alpha or HyperParam:new(0)
 	local newobj = {
 		trace1 = trace1,
 		trace2 = trace2,
@@ -384,8 +412,8 @@ function LARJKernel:jumpStep(currTrace)
 	if table.getn(oldStructTrace:freeVarNames(false, true)) + table.getn(newStructTrace:freeVarNames(false, true)) ~= 0
 		and self.annealSteps > 0 then
 		local lerpTrace = LARJInterpolationTrace:new(oldStructTrace, newStructTrace)
-		local hyperparams = {}
-		hyperparams[lerpTrace.alpha.name] = lerpTrace.alpha
+		local hyperparams = HyperParamTable:new()
+		hyperparams:add(lerpTrace.alpha)
 		local prevAccepted = self.diffusionKernel.proposalsAccepted
 
 		lerpTrace = self:releaseControl(lerpTrace)

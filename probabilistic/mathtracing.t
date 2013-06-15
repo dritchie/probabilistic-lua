@@ -224,10 +224,6 @@ function IR.VarNode:type()
 	return self.value.type
 end
 
-function IR.VarNode:isNamedParameter()
-	return self.value.displayname ~= nil
-end
-
 function IR.VarNode:emitCCode()
 	return self:name()
 end
@@ -718,15 +714,12 @@ local function makeRandomVariableNode(name)
 	return IR.ArraySubscriptNode:new(name2index[name], randomVarsNode)
 end
 
--- Retrieve (or create) an IR variable node corresponding to an inference
--- hyperparameter named 'name' with Terra type 'type'
+-- Create an IR variable node corresponding to an inference
+-- hyperparameter with Terra type 'type'
 local hyperparams = nil
-local function getParameterNode(name, type)
-	local node = hyperparams[name]
-	if not node then
-		node = IR.VarNode:new(symbol(type, name))
-		hyperparams[name] = node
-	end
+local function makeParameterNode(type)
+	local node = IR.VarNode:new(symbol(type))
+	hyperparams[node] = true
 	return node
 end
 
@@ -818,7 +811,7 @@ local function findNamedParameters(root)
 		vars = {},
 		__call =
 		function(self, node)
-			if util.inheritsFrom(node, IR.VarNode) and node:isNamedParameter() then
+			if util.inheritsFrom(node, IR.VarNode) and hyperparams[node] then
 				table.insert(self.vars, node)
 			end
 		end
@@ -906,7 +899,7 @@ return
 	traceNonstructuralVariable = traceNonstructuralVariable,
 	realNumberType = realNumberType,
 	setRealNumberType = setRealNumberType,
-	getParameterNode = getParameterNode,
+	makeParameterNode = makeParameterNode,
 	compileLogProbTrace = compileLogProbTrace,
 	compileTrace = compileTrace
 }
