@@ -15,7 +15,7 @@ local CompiledTraceState =
 			if not self.retval then
 				local nonStructNames = self.trace:freeVarNames(false, true)
 				for i,n in ipairs(nonStructNames) do
-					self.trace:setVarProp(n, "val", self.varVals[i-1])
+					self.trace:getRecord(n):setProp("val", self.varVals[i-1])
 				end
 				-- We don't need to evaluate expensive factors just to reconstruct
 				-- the return value
@@ -64,7 +64,7 @@ function CompiledTraceState:new(trace, other)
 			varVals = terralib.new(double[numNonStruct])
 		}
 		for i,n in ipairs(nonStructNames) do
-			newobj.varVals[i-1] = trace:getVarProp(n, "val")
+			newobj.varVals[i-1] = trace:getRecord(n):getProp("val")
 		end
 	end
 	setmetatable(newobj, self)
@@ -183,7 +183,7 @@ function CompiledGaussianDriftKernel:releaseControl(currState)
 	-- Copy the var values back into the trace
 	local nonStructVars = newTrace:freeVarNames(false, true)
 	for i,n in ipairs(nonStructVars) do
-		newTrace:setVarProp(n, "val", currState.varVals[i-1])
+		newTrace:getRecord(n):setProp("val", currState.varVals[i-1])
 	end
 	-- Run a full trace update to push these new values through
 	-- the computation
@@ -228,7 +228,7 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 	local numVars = table.getn(nonStructVars)
 	local bandwidths = terralib.new(double[numVars])
 	for i,n in ipairs(nonStructVars) do
-		local ann = currTrace:getVarProp(n, "annotation")
+		local ann = currTrace:getRecord(n):getProp("annotation")
 		bandwidths[i-1] = self.bandwidthMap[ann] or self.defaultBandwidth
 	end
 

@@ -243,11 +243,12 @@ function GaussianDriftKernel:next(currTrace)
 	-- Otherwise, make a proposal for a randomly-chosen variable, probabilistically
 	-- accept it
 	else
-		local ann = currTrace:getVarProp(name, "annotation")
-		local v = currTrace:getVarProp(name, "val")
+		local rec = newTrace:getRecord(name)
+		local ann = rec:getProp("annotation")
+		local v = rec:getProp("val")
 		local newv = erp.gaussian(v, self.bandwidthMap[ann] or self.defaultBandwidth)
-		newTrace:setVarProp(name, "val", newv)
-		newTrace:setVarProp(name, "logprob", newTrace:getVarProp(name, "erp"):logprob(newv, newTrace:getVarProp(name, "params")))
+		rec:setProp("val", newv)
+		rec:setProp("logprob", rec:getProp("erp"):logprob(newv, rec:getProp("params")))
 		newTrace:traceUpdate(true)
 		local acceptThresh = newTrace.logprob - currTrace.logprob
 		if newTrace.conditionsSatisfied and math.log(math.random()) < acceptThresh then
@@ -324,33 +325,31 @@ function LARJInterpolationTrace:freeVarNames(structural, nonstructural)
 	return fvall
 end
 
-function LARJInterpolationTrace:hasVar(name)
-	return self.trace1:hasVar(name) or self.trace2:hasVar()
+LARJInterpolationTrace.Record = {}
+
+function LARJInterpolationTrace.Record:new(rec1, rec2)
+	local newobj =
+	{
+		rec1 = rec1,
+		rec2 = rec2
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
 end
 
-function LARJInterpolationTrace:getVarProp(name, prop)
-	local var1 = self.trace1.vars[name]
-	if var1 then
-		return var1[prop]
-	else
-		local var2 = self.trace2.vars[name]
-		if var2 then
-			return var2[prop]
-		else
-			return nil
-		end
-	end
+function LARJInterpolationTrace.Record:getProp(propname)
+	return self.rec1 and self.rec1:getProp(propname) or
+		   self.rec2 and self.rec2:getProp(propname)
 end
 
-function LARJInterpolationTrace:setVarProp(name, prop, val)
-	local var1 = self.trace1.vars[name]
-	local var2 = self.trace2.vars[name]
-	if var1 then
-		var1[prop] = val
-	end
-	if var2 then
-		var2[prop] = val
-	end
+function LARJInterpolationTrace.Record:setProp(propname, val)
+	if self.rec1 then self.rec1:setProp(propname, val) end
+	if self.rec2 then self.rec2:setProp(propname, val) end
+end
+
+function LARJInterpolationTrace:getRecord(name)
+	return LARJInterpolationTrace.Record:new(self.trace1:getRecord(name), self.trace2:getRecord(name))
 end
 
 function LARJInterpolationTrace:deepcopy()
@@ -366,12 +365,6 @@ end
 function LARJInterpolationTrace:toggleFactorEval(switch)
 	self.trace1:toggleFactorEval(switch)
 	self.trace2:toggleFactorEval(switch)
-end
-
-function LARJInterpolationTrace:setLogProb(newlp)
-	local a = self.alpha:getValue()
-	self.trace1:setLogProb((1-a)*newlp)
-	self.trace2:setLogProb(a*newlp)
 end
 
 function LARJInterpolationTrace:traceUpdate(structureIsFixed)
