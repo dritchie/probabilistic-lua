@@ -186,8 +186,10 @@ function RandomWalkKernel:next(currTrace, hyperparams)
 		rec:setProp("val", propval)
 		rec:setProp("logprob", erp:logprob(propval, params))
 		nextTrace:traceUpdate(not self.structural)
-		fwdPropLP = fwdPropLP + nextTrace.newlogprob - math.log(table.getn(currTrace:freeVarNames(self.structural, self.nonstructural)))
-		rvsPropLP = rvsPropLP + nextTrace.oldlogprob - math.log(table.getn(nextTrace:freeVarNames(self.structural, self.nonstructural)))
+		if nextTrace.newlogprob ~= 0 or nextTrace.oldlogprob ~= 0 then
+			fwdPropLP = fwdPropLP + nextTrace.newlogprob - math.log(table.getn(currTrace:freeVarNames(self.structural, self.nonstructural)))
+			rvsPropLP = rvsPropLP + nextTrace.oldlogprob - math.log(table.getn(nextTrace:freeVarNames(self.structural, self.nonstructural)))
+		end
 		local acceptThresh = nextTrace.logprob - currTrace.logprob + rvsPropLP - fwdPropLP
 		if nextTrace.conditionsSatisfied and math.log(math.random()) < acceptThresh then
 			self.proposalsAccepted = self.proposalsAccepted + 1
