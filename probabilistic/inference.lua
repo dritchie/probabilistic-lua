@@ -1,14 +1,15 @@
 local trace = require("probabilistic.trace")
 local util = require("probabilistic.util")
 local mt = util.guardedTerraRequire("probabilistic.mathtracing")
+local erp = require("probabilistic.erp")
 
 
 -- Compute the discrete distribution over the given computation
 -- Only appropriate for computations that return a discrete value
 -- (Variadic arguments are arguments to the sampling function)
-local function distrib(computation, samplingFn, ...)
+local function distrib(computation, samplingFn, params)
 	local hist = {}
-	local samps = samplingFn(computation, ...)
+	local samps = samplingFn(computation, params)
 	for i,s in ipairs(samps) do
 		local prevval = hist[s.returnValue] or 0
 		hist[s.returnValue] = prevval + 1
@@ -32,14 +33,14 @@ end
 
 -- Compute the expected value of a computation
 -- Only appropraite for computations whose return value is a number or overloads + and /
-local function expectation(computation, samplingFn, ...)
-	local samps = samplingFn(computation, ...)
+local function expectation(computation, samplingFn, params)
+	local samps = samplingFn(computation, params)
 	return mean(util.map(function(s) return s.returnValue end, samps))
 end
 
 -- Maximum a posteriori inference (returns the highest probability sample)
-local function MAP(computation, samplingFn, ...)
-	local samps = samplingFn(computation, ...)
+local function MAP(computation, samplingFn, params)
+	local samps = samplingFn(computation, params)
 	local maxelem = {sample = nil, logprob = -math.huge}
 	for i,s in ipairs(samps) do
 		if s.logprob > maxelem.logprob then
@@ -57,20 +58,20 @@ local function rejectionSample(computation)
 end
 
 
--- A hyperparameter for an MCMC kernel
--- A name/value table of these may be passed to any kernel:next()
+-- A log probability hyperparameter for an MCMC kernel
+-- A table of these may be passed to any kernel:next() (see HyperParamTable)
 -- Certain kernels may expect/require certain hyperparameters
 -- For JITed traces, hyperparameters used anywhere in the logprob
 -- calculation *must* be provided via kernel:next() for the kernel
 --   to know their values.
 local HyperParam = {}
 
-function HyperParam:new(value)
+function HyperParam:new(name, value)
 	assert(type(value) == "number")
 	local newobj = 
 	{
-		value = value,
-		__value = mt.makeParameterNode(double)
+		name = name,
+		value = value
 	}
 	setmetatable(newobj, self)
 	self.__index = self
@@ -83,15 +84,15 @@ end
 
 function HyperParam:getValue()
 	if mt and mt.isOn() then
+		if not self.__value then
+			self.__value = mt.makeParameterNode(double, self.name)
+		end
 		return self.__value
 	else
 		return self.value
 	end
 end
 
-function HyperParam:name()
-	return self.__value:name()
-end
 
 local HyperParamTable = {}
 
@@ -103,17 +104,38 @@ function HyperParamTable:new()
 end
 
 function HyperParamTable:add(hyperparam)
-	self[hyperparam.__value:name()] = hyperparam
+	self[hyperparam.name] = hyperparam
 end
 
 function HyperParamTable:remove(hyperparam)
-	self[hyperparam.__value:name()] = nil
+	self[hyperparam.name] = nil
 end
 
 function HyperParamTable:copy()
 	local newtable = HyperParamTable:new()
 	util.copytablemembers(self, newtable)
 	return newtable
+end
+
+
+-- Basic parameters required by a kernel to function
+-- These get passed into the 'mcmc' function
+-- Different Kernels can add 'default' parameter values
+--    by adding them to the KernelParams table, which is the
+--    metatable of all KernelParams instances.
+local KernelParams =
+{
+	-- Set up the default parameters expected by *any* MCMC algorithm
+	numsamps = 1000,
+	lag = 1,
+	verbose = false
+}
+
+function KernelParams:new(paramtable)
+	paramtable = paramtable or {}
+	setmetatable(paramtable, self)
+	self.__index = self
+	return paramtable
 end
 
 
@@ -176,6 +198,74 @@ function RandomWalkKernel:stats()
 end
 
 
+-- MCMC Transition kernel that takes random walks for contiuous variables
+-- by perform single-variable gaussian drift
+-- NOTE: This is a fixed-dimensionality inference kernel (it will not make
+--    structural changes)
+local GaussianDriftKernel = {}
+
+-- Default parameter values
+KernelParams.bandwidthMap = {}
+KernelParams.defaultBandwidth = 0.1
+
+function GaussianDriftKernel:new(bandwidthMap, defaultBandwidth)
+	local newobj = 
+	{
+		bandwidthMap = bandwidthMap,
+		defaultBandwidth = defaultBandwidth,
+		proposalsMade = 0,
+		proposalsAccepted = 0
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function GaussianDriftKernel:assumeControl(currTrace)
+	return currTrace
+end
+
+function GaussianDriftKernel:releaseControl(currTrace)
+	return currTrace
+end
+
+function GaussianDriftKernel:next(currTrace)
+	self.proposalsMade = self.proposalsMade + 1
+	local newTrace = currTrace:deepcopy()
+	local name = util.randomChoice(newTrace:freeVarNames(false, true))
+
+	-- If we have no free random variables, then just run the computation
+	-- and generate another sample (this may not actually be deterministic,
+	-- in the case of nested query)
+	if not name then
+		newTrace:traceUpdate(true)
+		return newTrace
+	-- Otherwise, make a proposal for a randomly-chosen variable, probabilistically
+	-- accept it
+	else
+		local ann = currTrace:getVarProp(name, "annotation")
+		local v = currTrace:getVarProp(name, "val")
+		local newv = erp.gaussian(v, self.bandwidthMap[ann] or self.defaultBandwidth)
+		newTrace:setVarProp(name, "val", newv)
+		newTrace:setVarProp(name, "logprob", newTrace:getVarProp(name, "erp"):logprob(newv, newTrace:getVarProp(name, "params")))
+		newTrace:traceUpdate(true)
+		local acceptThresh = newTrace.logprob - currTrace.logprob
+		if newTrace.conditionsSatisfied and math.log(math.random()) < acceptThresh then
+			self.proposalsAccepted = self.proposalsAccepted + 1
+			return newTrace
+		else
+			return currTrace
+		end
+	end
+end
+
+function GaussianDriftKernel:stats()
+	print(string.format("Acceptance ratio: %g (%u/%u)", self.proposalsAccepted/self.proposalsMade,
+														self.proposalsAccepted, self.proposalsMade))
+end
+
+
+
 -- Abstraction for the linear interpolation of two execution traces
 local LARJInterpolationTrace = {
 	properties = {
@@ -194,7 +284,7 @@ function LARJInterpolationTrace:__index(key)
 end
 
 function LARJInterpolationTrace:new(trace1, trace2, alpha)
-	alpha = alpha or HyperParam:new(0)
+	alpha = alpha or HyperParam:new("larjAnnealAlpha", 0)
 	local newobj = {
 		trace1 = trace1,
 		trace2 = trace2,
@@ -316,6 +406,10 @@ end
 -- MCMC transition kernel that does reversible jumps using the LARJ algorithm
 local LARJKernel = {}
 
+-- Default parameter values
+KernelParams.annealSteps = 0
+KernelParams.jumpFreq = nil
+
 function LARJKernel:new(diffusionKernel, annealSteps, jumpFreq)
 	local newobj = {
 		diffusionKernel = diffusionKernel,
@@ -402,8 +496,8 @@ function LARJKernel:jumpStep(currTrace)
 	var.val = propval
 	var.logprob = var.erp:logprob(var.val, var.params)
 	newStructTrace:traceUpdate()
-	local oldNumVars = table.getn(structVars)
-	local newNumVars = table.getn(newStructTrace:freeVarNames(true, false))
+	local oldNumVars = table.getn(oldStructTrace:freeVarNames(true, true))
+	local newNumVars = table.getn(newStructTrace:freeVarNames(true, true))
 	fwdPropLP = fwdPropLP + newStructTrace.newlogprob - math.log(oldNumVars)
 
 	-- We only actually do annealing if we have any non-structural variables and we're
@@ -473,20 +567,19 @@ end
 
 
 -- Do MCMC for 'numsamps' iterations using a given transition kernel
-local function mcmc(computation, kernel, numsamps, lag, verbose)
-	lag = (lag == nil) and 1 or lag
+local function mcmc(computation, kernel, kernelparams)
 	local currentTrace = trace.newTrace(computation)
 	local samps = {}
-	local iters = numsamps * lag
+	local iters = kernelparams.numsamps * kernelparams.lag
 	local currentState = kernel:assumeControl(currentTrace)
 	for i=1,iters do
 		currentState = kernel:next(currentState)
-		if i % lag == 0 then
+		if i % kernelparams.lag == 0 then
 			table.insert(samps, currentState)
 		end
 	end
 	currentTrace = kernel:releaseControl(currentState)
-	if verbose then
+	if kernelparams.verbose then
 		kernel:stats()
 	end
 	return samps
@@ -496,18 +589,37 @@ end
 -- Sample from a probabilistic computation for some
 -- number of iterations using single-variable-proposal
 -- Metropolis-Hastings 
-local function traceMH(computation, numsamps, lag, verbose)
-	lag = (lag == nil) and 1 or lag
-	return mcmc(computation, RandomWalkKernel:new(), numsamps, lag, verbose)
+local function traceMH(computation, params)
+	params = KernelParams:new(params)
+	return mcmc(computation, RandomWalkKernel:new(), params)
+end
+
+-- Sample from a (fixed-dimension) probabilistic computation
+-- using gaussian drift MH
+local function driftMH(computation, params)
+	params = KernelParams:new(params)
+	return mcmc(computation, GaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth),
+				params)
 end
 
 -- Sample from a probabilistic computation using locally
 -- annealed reversible jump mcmc
-local function LARJMH(computation, numsamps, lag, verbose, annealSteps, jumpFreq)
-	lag = (lag == nil) and 1 or lag
+local function LARJTraceMH(computation, params)
+	params = KernelParams:new(params)
 	return mcmc(computation,
-				LARJKernel:new(RandomWalkKernel:new(false, true), annealSteps, jumpFreq),
-				numsamps, lag, verbose)
+				LARJKernel:new(RandomWalkKernel:new(false, true), params.annealSteps, params.jumpFreq),
+				params)
+end
+
+-- Sample from a probabilistic computation using LARJMCMC
+-- with gaussian drift as the inner diffusion kernel
+local function LARJDriftMH(computation, params)
+	params = KernelParams:new(params)
+	return mcmc(computation,
+				LARJKernel:new(
+					GaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth),
+					params.annealSteps, params.jumpFreq),
+				params)
 end
 
 
@@ -519,9 +631,12 @@ return
 	expectation = expectation,
 	MAP = MAP,
 	rejectionSample = rejectionSample,
+	KernelParams = KernelParams,
 	RandomWalkKernel = RandomWalkKernel,
 	LARJKernel = LARJKernel,
 	mcmc = mcmc,
 	traceMH = traceMH,
-	LARJMH = LARJMH
+	driftMH = driftMH,
+	LARJTraceMH = LARJTraceMH,
+	LARJDriftMH = LARJDriftMH
 }

@@ -130,10 +130,17 @@ function CompiledTraceCache:evictLRU()
 end
 
 
--- An MCMC kernel that performs fixed-structure gaussian drift
+-- An MCMC kernel that performs continuious gaussian drift
 -- by JIT-compiling all proposal/probability calculations
 -- into machine code
+-- NOTE: This is a fixed-dimensionality inference kernel (it will not make
+--    structural changes)
 local CompiledGaussianDriftKernel = {}
+
+-- Default parameter values
+inf.KernelParams.bandwidthMap = {}
+inf.KernelParams.defaultBandwidth = 0.1
+inf.KernelParams.cacheSize = 10
 
 -- 'bandwidthMap' stores a map from type identifiers to gaussian drift bandwidths
 -- The type identifers are assumed to be used in the ERP 'annotation' fields
@@ -173,12 +180,14 @@ function CompiledGaussianDriftKernel:releaseControl(currState)
 	-- Make a new copy of the trace, since we might be modifying it
 	local newTrace = currState.trace:deepcopy()
 
-	-- Copy the var values and logprob back into the trace
+	-- Copy the var values back into the trace
 	local nonStructVars = newTrace:freeVarNames(false, true)
 	for i,n in ipairs(nonStructVars) do
 		newTrace:setVarProp(n, "val", currState.varVals[i-1])
 	end
-	newTrace:setLogProb(currState.logprob)
+	-- Run a full trace update to push these new values through
+	-- the computation
+	newTrace:traceUpdate(true)
 	return newTrace
 end
 
@@ -236,7 +245,6 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 	self.currStepFn = self:genStepFunction(numVars, paramVars, fn, bandwidths)
 end
 
-
 -- Terra version of erp.lua's "gaussian_sample"
 local cmath = terralib.includec("math.h")
 local cstdlib = terralib.includecstring [[
@@ -244,6 +252,8 @@ local cstdlib = terralib.includecstring [[
 	#define FLT_RAND_MAX 0.999999
 	double random() { return ((double)(rand()) / RAND_MAX)*FLT_RAND_MAX; }
 ]]
+--local random = cstdlib.random
+local random = terralib.cast({} -> double, math.random)
 local terra gaussian_sample(mu : double, sigma: double) : double
 	var u : double
 	var v : double
@@ -251,8 +261,8 @@ local terra gaussian_sample(mu : double, sigma: double) : double
 	var y : double
 	var q : double
 	repeat
-		u = 1 - cstdlib.random()
-		v = 1.7156 * (cstdlib.random() - 0.5)
+		u = 1 - random()
+		v = 1.7156 * (random() - 0.5)
 		x = u - 0.449871
 		y = cmath.fabs(v) + 0.386595
 		q = x*x + y*(0.196*y - 0.25472*x)
@@ -268,7 +278,7 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 	local step = 
 		terra(vals: &double, currLP: double, [arglist])
 			-- Pick a random variable
-			var i = [int](cstdlib.random() * [numVars])
+			var i = [int](random() * [numVars])
 			var v = vals[i]
 
 			-- Perturb
@@ -277,7 +287,7 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 
 			-- Accept/reject
 			var newLP = [lpfn](vals, [arglist])
-			if cmath.log(cstdlib.random()) < newLP - currLP then
+			if cmath.log(random()) < newLP - currLP then
 				return newLP, true
 			else
 				vals[i] = v
@@ -288,7 +298,10 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 	-- A Lua wrapper around the Terra function that calls it with the appropriate
 	-- additional hyperparameters
 	return function(state, hyperparams)
-		local additionalArgs = util.map(function(pvar) return hyperparams[pvar:name()]:getValue() end, paramVars)
+		local additionalArgs = {}
+		if hyperparams then
+			additionalArgs = util.map(function(pvar) return hyperparams[pvar:name()]:getValue() end, paramVars)
+		end
 		return step(state.varVals, state.logprob, unpack(additionalArgs))
 	end
 end
@@ -301,27 +314,27 @@ end
 
 -- Sample from a fixed-structure probabilistic computation for some
 -- number of iterations using compiled Gaussian drift MH
-local function fixedStructureDriftMH(computation, numsamps, lag, verbose, bandwidthMap, defaultBandwidth, cacheSize)
-	lag = (lag == nil) and 1 or lag
+local function driftMH_JIT(computation, params)
+	params = inf.KernelParams:new(params)
 	return inf.mcmc(computation,
-					CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSize),
-					numsamps, lag, verbose)
+					CompiledGaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth, params.cacheSize),
+					params)
 end
 
 -- Sample from a probabilistic computation using LARJMCMC, with an
 -- inner kernel that runs compiled Gaussian drift MH
-local function LARJDriftMH(computation, numsamps, lag, verbose, annealSteps, jumpFreq, bandwidthMap, defaultBandwidth, cacheSize)
-	lag = (lag == nil) and 1 or lag
+local function LARJDriftMH_JIT(computation, params)
+	params = inf.KernelParams:new(params)
 	return inf.mcmc(computation,
 					inf.LARJKernel:new(
-						CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSize),
-						annealSteps, jumpFreq),
-					numsamps, lag, verbose)
+						CompiledGaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth, params.cacheSize),
+						params.annealSteps, params.jumpFreq),
+					params)
 end
 
 -- Module exports
 return
 {
-	fixedStructureDriftMH = fixedStructureDriftMH,
-	LARJDriftMH = LARJDriftMH
+	driftMH_JIT = driftMH_JIT,
+	LARJDriftMH_JIT = LARJDriftMH_JIT
 }

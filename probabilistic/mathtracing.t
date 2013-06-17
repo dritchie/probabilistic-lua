@@ -148,7 +148,7 @@ end
 
 function IR.BinaryOpNode:emitTerraCode()
 	local op = terralib.defaultoperator(self.value)
-	return op(self.inputs[1]:emitTerraCode(), self.inputs[2]:emitTerraCode())
+	return op(`([self.inputs[1]:emitTerraCode()]), `([self.inputs[2]:emitTerraCode()]))
 end
 
 
@@ -717,8 +717,8 @@ end
 -- Create an IR variable node corresponding to an inference
 -- hyperparameter with Terra type 'type'
 local hyperparams = nil
-local function makeParameterNode(type)
-	local node = IR.VarNode:new(symbol(type))
+local function makeParameterNode(type, name)
+	local node = IR.VarNode:new(symbol(type, name))
 	hyperparams[node] = true
 	return node
 end
@@ -836,8 +836,8 @@ local function compileLogProbTrace(probTrace)
 	local traceCopy = probTrace:deepcopy()	-- since tracing clobbers a bunch of stuff
 	on()
 	traceCopy:traceUpdate(true)
-	off()
 	local expr = traceCopy.logprob
+	off()
 	-- Now do compilation
 	table.insert(trace.statements, IR.ReturnStatement:new(expr))
 	local params = findNamedParameters(trace)

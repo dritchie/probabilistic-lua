@@ -74,14 +74,15 @@ local fixedNumDots = 6
 local res = nil
 
 local t11 = os.clock()
---res = MAP(makeCircleOfDots(fixedNumDots), LARJMH, numsamps, 1, true, 0)
---res = MAP(transDimensionalCircleOfDots, LARJMH, numsamps, 1, true, 0)
+--res = MAP(makeCircleOfDots(fixedNumDots), driftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+--res = MAP(transDimensionalCircleOfDots, LARJDriftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+--res = MAP(transDimensionalCircleOfDots, LARJDriftMH, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
 local t12 = os.clock()
 
 local t21 = os.clock()
---res = MAP(makeCircleOfDots(fixedNumDots), fixedStructureDriftMH, numsamps, 1, true, {}, 0.25)
---res = MAP(transDimensionalCircleOfDots, LARJDriftMH, numsamps, 1, true, 0, nil, {}, 0.25)
-res = MAP(transDimensionalCircleOfDots, LARJDriftMH, numsamps/numAnnealSteps, 1, true, numAnnealSteps, nil, {}, 0.25)
+--res = MAP(makeCircleOfDots(fixedNumDots), driftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+--res = MAP(transDimensionalCircleOfDots, LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+res = MAP(transDimensionalCircleOfDots, LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
 local t22 = os.clock()
 
 print(string.format("Uncompiled: %g", (t12 - t11)))

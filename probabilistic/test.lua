@@ -5,6 +5,7 @@ openpackage(pr)
 
 samples = 150
 lag = 20
+larjAnnealSteps = 10
 runs = 5
 errorTolerance = 0.07
 
@@ -23,18 +24,17 @@ end
 function mhtest(name, computation, trueExpectation, tolerance)
 	tolerance = tolerance or errorTolerance
 	--test(name, replicate(runs, function() return expectation(computation, traceMH, samples, lag) end), trueExpectation, tolerance)
-	test(name, replicate(runs, function() return expectation(computation, LARJMH, samples, lag, false, 0) end), trueExpectation, tolerance)
+	test(name, replicate(runs, function() return expectation(computation, LARJTraceMH, {numsamps=samples, lag=lag}) end), trueExpectation, tolerance)
 end
 
 function larjtest(name, computation, trueExpectation, tolerance)
 	tolerance = tolerance or errorTolerance
-	test(name, replicate(runs, function() return expectation(computation, LARJMH, samples, lag, false, 10) end), trueExpectation, tolerance)
+	test(name, replicate(runs, function() return expectation(computation, LARJTraceMH, {numsamps=samples, lag=lag, annealSteps=larjAnnealSteps}) end), trueExpectation, tolerance)
 end
 
-function customtest(name, computation, trueExpectation, tolerance, sampler, ...)
+function customtest(name, computation, trueExpectation, tolerance, sampler, params)
 	tolerance = tolerance or errorTolerance
-	local samplerArgs = {...}
-	test(name, replicate(runs, function() return expectation(computation, sampler, unpack(samplerArgs)) end), trueExpectation, tolerance)
+	test(name, replicate(runs, function() return expectation(computation, sampler, params) end), trueExpectation, tolerance)
 end
 
 function eqtest(name, estvalues, truevalues, tolerance)
@@ -457,18 +457,61 @@ mhtest(
 	0.75)
 
 
--- Terra and tracing-related tests
+-- Terra-related tests
 
 if terralib then
 
-	customtest(
-		"compiled fixed-structure gaussian drift",
-		function()
-			return gaussian(0.1, 0.5)
-		end,
-		0.1,
-		errorTolerance,
-		fixedStructureDriftMH, samples, lag, false, {}, 0.25)
+	local function fixedStructureDriftTest(name, sampler)
+		customtest(
+			name,
+			function()
+				return gaussian(0.1, 0.5)
+			end,
+			0.1,
+			errorTolerance,
+			sampler,
+			{numsamps=samples, lag=lag, defaultBandwidth=0.5, verbose=false})
+	end
+	fixedStructureDriftTest("fixed-structure gaussian drift", driftMH)
+	fixedStructureDriftTest("compiled fixed-structure gaussian drift", driftMH_JIT)
+
+	local function jumpDrift(name, sampler)
+		customtest(
+			name,
+			function()
+				local num = uniformDraw({1, 2}, true)
+				local gs = {}
+				for i=1,num do
+					table.insert(gs, gaussian(0.1, 0.5))
+				end
+				return gs[1]
+			end, 
+			0.1,
+			errorTolerance,
+			sampler,
+			{numsamps=samples, lag=lag, defaultBandwidth=0.5, verbose=false})
+	end
+	jumpDrift("trans-dimensional gaussian drift (no annealing)", LARJDriftMH)
+	jumpDrift("compiled trans-dimensional gaussian drift (no annealing)", LARJDriftMH_JIT)
+
+	local function larjDrift(name, sampler)
+		customtest(
+			name,
+			function()
+				local num = uniformDraw({1, 2}, true)
+				local gs = {}
+				for i=1,num do
+					table.insert(gs, gaussian(0.1, 0.5))
+				end
+				return gs[1]
+			end,
+			0.1,
+			errorTolerance,
+			sampler,
+			{numsamps=samples, lag=lag, annealSteps=larjAnnealSteps, defaultBandwidth=0.5, verbose=false})
+	end
+	larjDrift("trans-dimensional gaussian drift (with annealing)", LARJDriftMH)
+	larjDrift("compiled trans-dimensional gaussian drift (with annealing)", LARJDriftMH_JIT)
 
 end
 
