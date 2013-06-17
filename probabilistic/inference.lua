@@ -175,9 +175,19 @@ function RandomWalkKernel:next(currTrace, hyperparams)
 	-- Otherwise, make a proposal for a randomly-chosen variable, probabilistically
 	-- accept it
 	else
-		local nextTrace, fwdPropLP, rvsPropLP = currTrace:proposeChange(name, not self.structural)
-		fwdPropLP = fwdPropLP - math.log(table.getn(currTrace:freeVarNames(self.structural, self.nonstructural)))
-		rvsPropLP = rvsPropLP - math.log(table.getn(nextTrace:freeVarNames(self.structural, self.nonstructural)))
+		local nextTrace = currTrace:deepcopy()
+		local rec = nextTrace:getRecord(name)
+		local erp = rec:getProp("erp")
+		local val = rec:getProp("val")
+		local params = rec:getProp("params")
+		local propval = erp:proposal(val, params)
+		local fwdPropLP = erp:logProposalProb(val, propval, params)
+		local rvsPropLP = erp:logProposalProb(propval, val, params)
+		rec:setProp("val", propval)
+		rec:setProp("logprob", erp:logprob(propval, params))
+		nextTrace:traceUpdate(not self.structural)
+		fwdPropLP = fwdPropLP + nextTrace.newlogprob - math.log(table.getn(currTrace:freeVarNames(self.structural, self.nonstructural)))
+		rvsPropLP = rvsPropLP + nextTrace.oldlogprob - math.log(table.getn(nextTrace:freeVarNames(self.structural, self.nonstructural)))
 		local acceptThresh = nextTrace.logprob - currTrace.logprob + rvsPropLP - fwdPropLP
 		if nextTrace.conditionsSatisfied and math.log(math.random()) < acceptThresh then
 			self.proposalsAccepted = self.proposalsAccepted + 1
@@ -290,6 +300,9 @@ function LARJInterpolationTrace:new(trace1, trace2, alpha)
 		trace1 = trace1,
 		trace2 = trace2,
 		alpha = alpha,
+		-- These next two are expected by the random walk kernel
+		newlogprob = 0,
+		oldlogprob = 0
 	}
 	setmetatable(newobj, self)
 	return newobj
@@ -370,29 +383,6 @@ end
 function LARJInterpolationTrace:traceUpdate(structureIsFixed)
 	self.trace1:traceUpdate(structureIsFixed)
 	self.trace2:traceUpdate(structureIsFixed)
-end
-
-function LARJInterpolationTrace:proposeChange(varname, structureIsFixed)
-	assert(structureIsFixed)
-	local nextTrace = self:deepcopy()
-	local var1 = nextTrace.trace1.vars[varname]
-	local var2 = nextTrace.trace2.vars[varname]
-	local var = var1 or var2
-	assert(not var.structural) 	-- We're only suposed to be making changes to non-structurals here
-	local propval = var.erp:proposal(var.val, var.params)
-	local fwdPropLP = var.erp:logProposalProb(var.val, propval, var.params)
-	local rvsPropLP = var.erp:logProposalProb(propval, var.val, var.params)
-	if var1 then
-		var1.val = propval
-		var1.logprob = var1.erp:logprob(var1.val, var1.params)
-		nextTrace.trace1:traceUpdate(structureIsFixed)
-	end
-	if var2 then
-		var2.val = propval
-		var2.logprob = var2.erp:logprob(var2.val, var2.params)
-		nextTrace.trace2:traceUpdate(structureIsFixed)
-	end
-	return nextTrace, fwdPropLP, rvsPropLP
 end
 
 

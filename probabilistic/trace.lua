@@ -189,26 +189,6 @@ function RandomExecutionTrace:traceUpdate(structureIsFixed)
 	trace = origtrace
 end
 
--- Propose a random change to a random variable 'varname'
--- Returns a new sample trace from the computation and the
--- forward and reverse probabilities of this proposal
-function RandomExecutionTrace:proposeChange(varname, structureIsFixed)
-	local nextTrace = self:deepcopy()
-	local var = nextTrace.vars[varname]
-	local propval = var.erp:proposal(var.val, var.params)
-	local fwdPropLP = var.erp:logProposalProb(var.val, propval, var.params)
-	local rvsPropLP = var.erp:logProposalProb(propval, var.val, var.params)
-	var.val = propval
-	var.logprob = var.erp:logprob(var.val, var.params)
-	nextTrace:traceUpdate(structureIsFixed)
-	fwdPropLP = fwdPropLP + nextTrace.newlogprob
-	rvsPropLP = rvsPropLP + nextTrace.oldlogprob
-	return nextTrace, fwdPropLP, rvsPropLP
-end
-
--- local logfile = io.open("log.csv", "w")
--- local iteration = 0
--- logfile:write("iteration,numframes\n")
 
 -- Return the current structural name, as determined by the interpreter stack
 function RandomExecutionTrace:currentName(numFrameSkip)
