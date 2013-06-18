@@ -168,7 +168,9 @@ end
 
 function CompiledGaussianDriftKernel:assumeControl(currTrace)
 	-- Translate trace into internal state
+	mt.startTimer("TraceToStateConversion")
 	local currState = CompiledTraceState:new(currTrace)
+	mt.stopTimer("TraceToStateConversion")
 
 	-- Check for structure change/need recompile
 	self:compile(currTrace)
@@ -211,7 +213,9 @@ end
 function CompiledGaussianDriftKernel:compile(currTrace)
 	local sigs = currTrace:structuralSignatures()
 	-- Look for an already-compiled trace in the cache
+	mt.startTimer("CacheLookup")
 	local fn = self.compileCache:lookup(sigs)
+	mt.stopTimer("CacheLookup")
 	if fn then
 		self.currStepFn = fn
 	else
@@ -242,7 +246,9 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 	fn, paramVars = mt.compileLogProbTrace(currTrace)
 
 	-- Generate a specialized step function
+	mt.startTimer("StepFunctionCompile")
 	self.currStepFn = self:genStepFunction(numVars, paramVars, fn, bandwidths)
+	mt.stopTimer("StepFunctionCompile")
 end
 
 -- Terra version of erp.lua's "gaussian_sample"

@@ -686,6 +686,52 @@ addWrappedBinaryFuncs(irmath, {
 })
 
 
+---------------
+-- Profiling --
+---------------
+
+local profilingEnabled = false
+local timers = {}
+
+local function toggleProfiling(flag)
+	profilingEnabled = flag
+end
+
+local function startTimer(name, excludeFromTotal)
+	if profilingEnabled then
+		local timer = timers[name]
+		if not timer then
+			timer = util.Timer:new()
+			timers[name] = timer
+		end
+		timer.excludeFromTotal = excludeFromTotal
+		timer:start()
+	end
+end
+
+local function stopTimer(name)
+	if profilingEnabled then
+		local timer = timers[name]
+		if not timer then
+			error("Attempted to stop a timer that does not exist!")
+		end
+		timer:stop()
+	end
+end
+
+local function getTimingProfile()
+	local timings = util.map(function(timer) return timer:getElapsedTime() end, timers)
+	local total = 0
+	for name,timer in pairs(timers) do
+		if not timer.excludeFromTotal then
+			total = total + timer:getElapsedTime()
+		end
+	end
+	timings["TOTAL"] = total
+	return timings
+end
+
+
 ------------------------------------
 -- Publicly visible functionality --
 ------------------------------------
@@ -825,6 +871,14 @@ end
 -- Returns a compiled function, followed by all of the parameter
 --   variables found in the recorded trace.
 local function compileLogProbTrace(probTrace)
+	-- If profiling is on, run a normal traceUpdate so we can see how much overhead
+	-- the IR generation adds to this
+	if profilingEnabled then
+		startTimer("NormalTraceUpdate", true)
+		probTrace:traceUpdate(true)
+		stopTimer("NormalTraceUpdate")
+	end
+	startTimer("IRGeneration")
 	-- First, extract and save a consistent ordering of the
 	-- random variables
 	name2index = {}
@@ -845,16 +899,15 @@ local function compileLogProbTrace(probTrace)
 	util.appendarray(params, fnargs)
 	local fnname = tostring(symbol())
 	local fn = IR.FunctionDefinition:new(fnname, realnumtype, fnargs, trace)
+	stopTimer("IRGeneration")
+	startTimer("LogProbAssemble")
+	local cfn = fn:emitTerraCode()
+	stopTimer("LogProbAssemble")
+	startTimer("LogProbCompile")
+	cfn:compile()
+	stopTimer("LogProbCompile")
 
-	--print(fn:emitCCode())
-
-	-- Uncomment the next two lines to use C instead of Terra.
-	-- local C = terralib.includecstring(string.format("#include <math.h>\n\n%s", fn:emitCCode()))
-	-- return C[fnname], params
-
-	--print(fn:emitTerraCode():printpretty())
-
-	return fn:emitTerraCode(), params
+	return cfn, params
 end
 
 -- Find all the free (non-intermediate) variables in an IR
@@ -893,6 +946,10 @@ end
 return
 {
 	IR = IR,
+	toggleProfiling = toggleProfiling,
+	startTimer = startTimer,
+	stopTimer = stopTimer,
+	getTimingProfile = getTimingProfile,
 	on = on,
 	off = off,
 	isOn = isOn,

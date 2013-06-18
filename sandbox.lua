@@ -4,7 +4,7 @@ util = require("probabilistic.util")
 erp = require("probabilistic.erp")
 util.openpackage(pr)
 
-function circleOfDots(numDots)
+local function circleOfDots(numDots, fweight)
 
 	-- helpers
 	local function norm(v)
@@ -39,7 +39,8 @@ function circleOfDots(numDots)
 	for i=0,numDots-1 do
 		local j = ((i+1) % numDots) + 1
 		local d = dist(points[i+1], points[j])
-		factor(erp.gaussian_logprob(d, targetdist, distsd))
+		local f = erp.gaussian_logprob(d, targetdist, distsd)
+		factor(fweight*f)
 	end
 
 	-- angle between triples factors
@@ -47,55 +48,142 @@ function circleOfDots(numDots)
 		local j = ((i+1) % numDots)+1
 		local k = ((i+2) % numDots)+1
 		local dp = angDP(points[i+1], points[j], points[k])
-		factor(erp.gaussian_logprob(dp, targetdp, dpsd))
+		local f = erp.gaussian_logprob(dp, targetdp, dpsd)
+		factor(fweight*f)
 	end
 
 	return points
 end
 
-function makeCircleOfDots(numDots)
+local function makeFixedDimensionProgram(numDots, fweight)
 	return function()
-		return circleOfDots(numDots)
+		return circleOfDots(numDots, fweight)
 	end
 end
 
-function transDimensionalCircleOfDots()
-	local dims = {4, 5, 6, 7, 8}
-	local numDots = uniformDraw(dims, true)
-	return circleOfDots(numDots)
+local function makeTransdimensionalProgram(dims, fweight)
+	return function()
+		local numDots = uniformDraw(dims, true)
+		return circleOfDots(numDots, fweight)
+	end
 end
 
 -----------
 
-local numsamps = 100000
-local numAnnealSteps = 10
-local fixedNumDots = 6
-
-local res = nil
-
-local t11 = os.clock()
---res = MAP(makeCircleOfDots(fixedNumDots), driftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
---res = MAP(transDimensionalCircleOfDots, LARJDriftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
---res = MAP(transDimensionalCircleOfDots, LARJDriftMH, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
-local t12 = os.clock()
-
-local t21 = os.clock()
---res = MAP(makeCircleOfDots(fixedNumDots), driftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
---res = MAP(transDimensionalCircleOfDots, LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
-res = MAP(transDimensionalCircleOfDots, LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
-local t22 = os.clock()
-
-print(string.format("Uncompiled: %g", (t12 - t11)))
-print(string.format("Compiled: %g", (t22 - t21)))
-
-
-local function saveDotCSV(points, filename)
-	local f = io.open(filename, "w")
-	f:write("dotnum,x,y\n")
-	for i,p in ipairs(points) do
-		f:write(string.format("%u,%g,%g\n", i, p.x, p.y))
+local function genCachePerfGraph(filename, maxDim, minCacheSize, cacheStep, startSamps, endSamps, sampStep, fweightStart, fweightEnd, fweightMul)
+	print("Generating statistics for cache performance graph...")
+	local outfile = io.open(filename, "w")
+	outfile:write("sampler type,num samples,factor weight,% traces not in cache,wall clock time\n")
+	local dims = {}
+	for i=minCacheSize,maxDim do table.insert(dims, i) end
+	for numsamps=startSamps, endSamps, sampStep do
+		local fweight = fweightStart
+		while fweight > fweightEnd do
+			local computation = makeTransdimensionalProgram(dims, fweight)
+			-- Run the uncompiled sampler
+			io.write(string.format("numsamps: %d, fweight: %g, uncompiled                 \r", numsamps, fweight))
+			local t1 = os.clock()
+			LARJDriftMH(computation, {numsamps=numsamps, defaultBandwidth=0.25})
+			local t2 = os.clock()
+			outfile:write(string.format("Uncompiled,%d,%g,N/A,%g\n", numsamps, fweight, t2-t1))
+			-- Run the compiled sampler for different cache sizes
+			for cacheSize=maxDim, minCacheSize, -cacheStep do
+				io.write(string.format("numsamps: %d, fweight: %g, cacheSize: %d\r", numsamps, fweight, cacheSize))
+				local percentNotInCache = (maxDim-cacheSize) / maxDim
+				local t1 = os.clock()
+				LARJDriftMH_JIT(computation, {numsamps=numsamps, defaultBandwidth=0.25, cacheSize=cacheSize})
+				local t2 = os.clock()
+				outfile:write(string.format("Compiled,%d,%g,%g,%g\n", numsamps, fweight, percentNotInCache, t2-t1))
+			end
+			fweight = fweight * fweightMul
+		end
 	end
-	f:close()
+	io.write("\n")
+	outfile:close()
 end
 
-saveDotCSV(res, "dotvis/dots.csv")
+local function genAnnealingPerfGraph(filename, numsamples, dims, annealStepsStart, annealStepsEnd, annealStepsMul)
+	print("Generating statistics for annealing performance graph...")
+	local outfile = io.open(filename, "w")
+	outfile:write("sampler type,num anneal steps,wall clock time\n")
+	local computation = makeTransdimensionalProgram(dims, 0.5)
+	local cacheSize = 2*table.getn(dims)	-- Enough cache to store all possible traces
+	local annealSteps = annealStepsStart
+	while annealSteps < annealStepsEnd do
+		io.write(string.format("annealing steps: %d\r", annealSteps))
+		-- Run the uncompiled sampler
+		local t1 = os.clock()
+		LARJDriftMH(computation, {numsamps=numsamples, defaultBandwidth=0.25, annealSteps=annealSteps})
+		local t2 = os.clock()
+		outfile:write(string.format("Uncompiled,%d,%g\n", annealSteps, t2 - t1))
+		-- Run the compiled sampler
+		local t1 = os.clock()
+		LARJDriftMH_JIT(computation, {numsamps=numsamples, defaultBandwidth=0.25, annealSteps=annealSteps, cacheSize=cacheSize})
+		local t2 = os.clock()
+		outfile:write(string.format("Compiled,%d,%g\n", annealSteps, t2 - t1))
+		annealSteps = annealSteps * annealStepsMul
+	end
+	io.write("\n")
+	outfile:close()
+end
+
+local function genProfilingStats(filename, numsamples, dims, fweight, cacheSize)
+	print("Generating profiling stats...")
+	local computation = makeTransdimensionalProgram(dims, fweight)
+	local mt = terralib.require("probabilistic.mathtracing")
+	mt.toggleProfiling(true)
+	LARJDriftMH_JIT(computation, {numsamps=numsamples, defaultBandwidth=0.25, cacheSize=cacheSize})
+	mt.toggleProfiling(false)
+	local profile = mt.getTimingProfile()
+	local outfile = io.open(filename, "w")
+	outfile:write("task,wall clock time\n")
+	outfile:write(string.format("CacheLookup,%g\n", profile["CacheLookup"]))
+	outfile:write(string.format("TraceUpdate,%g\n", profile["NormalTraceUpdate"]))
+	outfile:write(string.format("IRGenOverhead,%g\n", profile["IRGeneration"] - profile["NormalTraceUpdate"]))
+	outfile:write(string.format("LogProbAssemble,%g\n", profile["LogProbAssemble"]))
+	outfile:write(string.format("LogProbCompile,%g\n", profile["LogProbCompile"]))
+	outfile:write(string.format("TraceToStateConversion,%g\n", profile["TraceToStateConversion"]))
+	outfile:write(string.format("StepFunctionCompile,%g\n", profile["StepFunctionCompile"]))
+	outfile:close()
+end
+
+--genCachePerfGraph("Tableau/cachePerf/cachePerf.csv", 7, 3, 1, 10000, 100000, 10000, 1.0, 0.001, 0.5)
+--genAnnealingPerfGraph("Tableau/annealingPerf/annealingPerf.csv", 10000, {3, 4, 5, 6, 7}, 10, 1000, 2)
+genProfilingStats("Tableau/profiling/profiling.csv", 100000, {3, 4, 5, 6, 7, 8, 9, 10}, 0.01, 3)
+
+-------
+
+-- local numsamps = 100000
+-- local numAnnealSteps = 10
+-- local dots = 6
+-- local dims = {4, 5, 6, 7, 8}
+-- local fweight = 1.0
+
+-- local res = nil
+
+-- local t11 = os.clock()
+-- --res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+-- --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+-- --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
+-- local t12 = os.clock()
+
+-- local t21 = os.clock()
+-- --res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+-- res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+-- --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
+-- local t22 = os.clock()
+
+-- print(string.format("Uncompiled: %g", (t12 - t11)))
+-- print(string.format("Compiled: %g", (t22 - t21)))
+
+
+-- local function saveDotCSV(points, filename)
+-- 	local f = io.open(filename, "w")
+-- 	f:write("dotnum,x,y\n")
+-- 	for i,p in ipairs(points) do
+-- 		f:write(string.format("%u,%g,%g\n", i, p.x, p.y))
+-- 	end
+-- 	f:close()
+-- end
+
+-- saveDotCSV(res, "Tableau/dotvis/dots.csv")

@@ -147,6 +147,51 @@ function M.guardedTerraRequire(filename)
 	end
 end
 
+-- Rudimentary cumulative timer class
+M.Timer = {}
+
+function M.Timer:new()
+	local newobj = 
+	{
+		accum = 0,
+		startime = nil
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function M.Timer:start()
+	if not self:isRunning() then
+		self.startime = os.clock()
+	end
+end
+
+function M.Timer:stop()
+	if self:isRunning() then
+		local endtime = os.clock()
+		self.accum = self.accum + (endtime - self.startime)
+		self.startime = nil
+	end
+end
+
+function M.Timer:isRunning()
+	return self.startime ~= nil
+end
+
+function M.Timer:getElapsedTime()
+	local time = self.accum
+	if self:isRunning() then
+		local curtime = os.clock()
+		time = time + (curtime - self.startime)
+	end
+	return time
+end
+
+function M.Timer:reset()
+	self:stop()
+	self.accum = 0
+end
 
 -- exports
 return M
