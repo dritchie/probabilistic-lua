@@ -2,6 +2,7 @@ local util = require("probabilistic.util")
 local mt = terralib.require("probabilistic.mathtracing")
 local cmath = terralib.require("probabilistic.cmath")
 local inf = require("probabilistic.inference")
+local prof = require("probabilistic.profiling")
 
 
 -- Internal sampler state for compiled kernels
@@ -169,9 +170,9 @@ end
 
 function CompiledGaussianDriftKernel:assumeControl(currTrace)
 	-- Translate trace into internal state
-	mt.startTimer("TraceToStateConversion")
+	prof.startTimer("TraceToStateConversion")
 	local currState = CompiledTraceState:new(currTrace)
-	mt.stopTimer("TraceToStateConversion")
+	prof.stopTimer("TraceToStateConversion")
 
 	-- Check for structure change/need recompile
 	self:compile(currTrace)
@@ -214,9 +215,9 @@ end
 function CompiledGaussianDriftKernel:compile(currTrace)
 	local sigs = currTrace:structuralSignatures()
 	-- Look for an already-compiled trace in the cache
-	mt.startTimer("CacheLookup")
+	prof.startTimer("CacheLookup")
 	local fn = self.compileCache:lookup(sigs)
-	mt.stopTimer("CacheLookup")
+	prof.stopTimer("CacheLookup")
 	if fn then
 		self.currStepFn = fn
 	else
@@ -247,9 +248,9 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 	fn, paramVars = mt.compileLogProbTrace(currTrace)
 
 	-- Generate a specialized step function
-	mt.startTimer("StepFunctionCompile")
+	prof.startTimer("StepFunctionCompile")
 	self.currStepFn = self:genStepFunction(numVars, paramVars, fn, bandwidths)
-	mt.stopTimer("StepFunctionCompile")
+	prof.stopTimer("StepFunctionCompile")
 end
 
 -- Terra version of erp.lua's "gaussian_sample"
@@ -300,6 +301,9 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 				return currLP, false
 			end
 		end
+
+	-- Compile it right now (for more accurate profiling info)
+	step:compile()
 
 	-- A Lua wrapper around the Terra function that calls it with the appropriate
 	-- additional hyperparameters

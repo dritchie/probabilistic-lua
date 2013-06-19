@@ -1,5 +1,6 @@
 local util = require("probabilistic.util")
 local cmath = terralib.require("probabilistic.cmath")
+local prof = require("probabilistic.profiling")
 
 local IR = {}
 
@@ -683,52 +684,6 @@ addWrappedBinaryFuncs(irmath, {
 })
 
 
----------------
--- Profiling --
----------------
-
-local profilingEnabled = false
-local timers = {}
-
-local function toggleProfiling(flag)
-	profilingEnabled = flag
-end
-
-local function startTimer(name, excludeFromTotal)
-	if profilingEnabled then
-		local timer = timers[name]
-		if not timer then
-			timer = util.Timer:new()
-			timers[name] = timer
-		end
-		timer.excludeFromTotal = excludeFromTotal
-		timer:start()
-	end
-end
-
-local function stopTimer(name)
-	if profilingEnabled then
-		local timer = timers[name]
-		if not timer then
-			error("Attempted to stop a timer that does not exist!")
-		end
-		timer:stop()
-	end
-end
-
-local function getTimingProfile()
-	local timings = util.map(function(timer) return timer:getElapsedTime() end, timers)
-	local total = 0
-	for name,timer in pairs(timers) do
-		if not timer.excludeFromTotal then
-			total = total + timer:getElapsedTime()
-		end
-	end
-	timings["TOTAL"] = total
-	return timings
-end
-
-
 ------------------------------------
 -- Publicly visible functionality --
 ------------------------------------
@@ -870,12 +825,12 @@ end
 local function compileLogProbTrace(probTrace)
 	-- If profiling is on, run a normal traceUpdate so we can see how much overhead
 	-- the IR generation adds to this
-	if profilingEnabled then
-		startTimer("NormalTraceUpdate", true)
+	if prof.profilingIsEnabled() then
+		prof.startTimer("NormalTraceUpdate", true)
 		probTrace:traceUpdate(true)
-		stopTimer("NormalTraceUpdate")
+		prof.stopTimer("NormalTraceUpdate")
 	end
-	startTimer("IRGeneration")
+	prof.startTimer("IRGeneration")
 	-- First, extract and save a consistent ordering of the
 	-- random variables
 	name2index = {}
@@ -896,13 +851,13 @@ local function compileLogProbTrace(probTrace)
 	util.appendarray(params, fnargs)
 	local fnname = tostring(symbol())
 	local fn = IR.FunctionDefinition:new(fnname, realnumtype, fnargs, trace)
-	stopTimer("IRGeneration")
-	startTimer("LogProbAssemble")
+	prof.stopTimer("IRGeneration")
+	prof.startTimer("LogProbAssemble")
 	local cfn = fn:emitTerraCode()
-	stopTimer("LogProbAssemble")
-	startTimer("LogProbCompile")
+	prof.stopTimer("LogProbAssemble")
+	prof.startTimer("LogProbCompile")
 	cfn:compile()
-	stopTimer("LogProbCompile")
+	prof.stopTimer("LogProbCompile")
 
 	return cfn, params
 end
@@ -943,10 +898,6 @@ end
 return
 {
 	IR = IR,
-	toggleProfiling = toggleProfiling,
-	startTimer = startTimer,
-	stopTimer = stopTimer,
-	getTimingProfile = getTimingProfile,
 	on = on,
 	off = off,
 	isOn = isOn,
@@ -957,21 +908,3 @@ return
 	compileLogProbTrace = compileLogProbTrace,
 	compileTrace = compileTrace
 }
-
-
--- --- TEST ---
-
--- on()
-
--- local function dist(point1, point2)
--- 	local xdiff = point1[1] - point2[1]
--- 	local ydiff = point1[2] - point2[2]
--- 	return math.sqrt(xdiff*xdiff + ydiff*ydiff)
--- end
-
--- local p1 = {IR.VarNode:new("x1"), IR.VarNode:new("y1")}
--- --local p2 = {IR.VarNode:new("x2"), IR.VarNode:new("y2")}
--- -- local p1 = {0, 0}
--- local p2 = {1, math.pi}
--- print(dist(p1, p2):emitCCode())
--- --print(dist(p1, p2))

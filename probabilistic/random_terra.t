@@ -21,12 +21,12 @@ end
 
 
 -- What's our base RNG?
-local random = terralib.cast({} -> double, math.random)
--- local random = terralib.includecstring([[
--- 	#include <stdlib.h>
--- 	#define FLT_RAND_MAX 0.999999
--- 	double random() { return ((double)(rand()) / RAND_MAX)*FLT_RAND_MAX; }
--- ]]).random
+--local random = terralib.cast({} -> double, math.random)
+local random = terralib.includecstring([[
+	#include <stdlib.h>
+	#define FLT_RAND_MAX 0.999999
+	double random_() { return ((double)(rand()) / RAND_MAX)*FLT_RAND_MAX; }
+]]).random_
 
 
 -- Define all the samplers/scorers!
