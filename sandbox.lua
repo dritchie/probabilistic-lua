@@ -1,7 +1,7 @@
 
 pr = require("probabilistic")
 util = require("probabilistic.util")
-erp = require("probabilistic.erp")
+random = require("probabilistic.random")
 util.openpackage(pr)
 
 local function circleOfDots(numDots, fweight)
@@ -32,14 +32,14 @@ local function circleOfDots(numDots, fweight)
 	-- prior
 	local points = {}
 	for i=1,numDots do
-		table.insert(points, { x = gaussian(gmean, gsd), y = gaussian(gmean, gsd) })
+		table.insert(points, { x = gaussian({gmean, gsd}), y = gaussian({gmean, gsd}) })
 	end
 
 	-- distance between pairs factors
 	for i=0,numDots-1 do
 		local j = ((i+1) % numDots) + 1
 		local d = dist(points[i+1], points[j])
-		local f = erp.gaussian_logprob(d, targetdist, distsd)
+		local f = random.gaussian_logprob(d, targetdist, distsd)
 		factor(fweight*f)
 	end
 
@@ -48,7 +48,7 @@ local function circleOfDots(numDots, fweight)
 		local j = ((i+1) % numDots)+1
 		local k = ((i+2) % numDots)+1
 		local dp = angDP(points[i+1], points[j], points[k])
-		local f = erp.gaussian_logprob(dp, targetdp, dpsd)
+		local f = random.gaussian_logprob(dp, targetdp, dpsd)
 		factor(fweight*f)
 	end
 
@@ -63,7 +63,7 @@ end
 
 local function makeTransdimensionalProgram(dims, fweight)
 	return function()
-		local numDots = uniformDraw(dims, true)
+		local numDots = uniformDraw(dims, {isStructural=true})
 		return circleOfDots(numDots, fweight)
 	end
 end

@@ -1,7 +1,7 @@
 local trace = require("probabilistic.trace")
 local util = require("probabilistic.util")
 local mt = util.guardedTerraRequire("probabilistic.mathtracing")
-local erp = require("probabilistic.erp")
+local random = require("probabilistic.random")
 
 
 -- Compute the discrete distribution over the given computation
@@ -258,7 +258,7 @@ function GaussianDriftKernel:next(currTrace)
 		local rec = newTrace:getRecord(name)
 		local ann = rec:getProp("annotation")
 		local v = rec:getProp("val")
-		local newv = erp.gaussian(v, self.bandwidthMap[ann] or self.defaultBandwidth)
+		local newv = random.gaussian_sample(v, self.bandwidthMap[ann] or self.defaultBandwidth)
 		rec:setProp("val", newv)
 		rec:setProp("logprob", rec:getProp("erp"):logprob(newv, rec:getProp("params")))
 		newTrace:traceUpdate(true)

@@ -108,7 +108,7 @@ end
 -- Difference in log probability between this trace and the other
 -- due to variables that this one has that the other does not
 function RandomExecutionTrace:lpDiff(other)
-	return util.sum(
+	return util.sumtable(
 		util.map(
 			function(name) return self.vars[name].logprob end,
 			self:varDiff(other)))
@@ -241,7 +241,7 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 	end
 	-- If we didn't find the variable, create a new one
 	if not record then
-		local val = conditionedValue or erp:sample_impl(params)
+		local val = conditionedValue or erp:sample(params)
 		local ll = erp:logprob(val, params)
 		self.newlogprob  = self.newlogprob + ll
 		record = RandomVariableRecord:new(name, erp, params, val, ll, isStructural, conditionedValue ~= nil, annotation)
@@ -314,7 +314,7 @@ end
 
 local function lookupVariableValue(erp, params, isStructural, numFrameSkip, conditionedValue, annotation)
 	if not trace then
-		return conditionedValue or erp:sample_impl(params)
+		return conditionedValue or erp:sample(params)
 	else
 		-- We don't do numFrameSkip + 1 because this is a tail call
 		return trace:lookup(erp, params, numFrameSkip, isStructural, conditionedValue, annotation)

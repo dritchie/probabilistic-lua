@@ -2,6 +2,7 @@ local util = require("probabilistic.util")
 util.openpackage(util)
 local pr = require("probabilistic")
 openpackage(pr)
+local random = require("probabilistic.random")
 
 samples = 150
 lag = 20
@@ -64,25 +65,25 @@ print("starting tests...")
 test("flip sample",
 	 replicate(runs,
 	 	function() return mean(replicate(samples,
-	 		function() return flip(0.7) end))
+	 		function() return flip({0.7}) end))
 	 	end),
 	 0.7)
 
 mhtest(
 	"flip query",
-	function() return flip(0.7) end,
+	function() return flip({0.7}) end,
 	0.7)
 
 test("uniform sample",
 	 replicate(runs,
 	 	function() return mean(replicate(samples,
-	 		function() return uniform(0.1, 0.4) end))
+	 		function() return uniform({0.1, 0.4}) end))
 	 	end),
 	 0.5*(.1+.4))
 
 mhtest(
 	"uniform query",
-	function() return uniform(0.1, 0.4) end,
+	function() return uniform({0.1, 0.4}) end,
 	0.5*(.1+.4))
 
 test("multinomial sample",
@@ -100,114 +101,114 @@ mhtest(
 eqtest(
 	"multinomial lp",
 	{
-		multinomial_logprob(1, {.2, .6, .2}),
-		multinomial_logprob(2, {.2, .6, .2}),
-		multinomial_logprob(3, {.2, .6, .2})
+		random.multinomial_logprob(1, .2, .6, .2),
+		random.multinomial_logprob(2, .2, .6, .2),
+		random.multinomial_logprob(3, .2, .6, .2)
 	},
 	{math.log(0.2), math.log(0.6), math.log(0.2)})
 
 test("gaussian sample",
 	 replicate(runs,
 	 	function() return mean(replicate(samples,
-	 		function() return gaussian(0.1, 0.5) end))
+	 		function() return gaussian({0.1, 0.5}) end))
 	 	end),
 	 0.1)
 
 mhtest(
 	"gaussian query",
-	function() return gaussian(0.1, 0.5) end,
+	function() return gaussian({0.1, 0.5}) end,
 	0.1)
 
 eqtest(
 	"gaussian lp",
 	{
-		gaussian_logprob(0, 0.1, 0.5),
-		gaussian_logprob(0.25, 0.1, 0.5),
-		gaussian_logprob(0.6, 0.1, 0.5)
+		random.gaussian_logprob(0, 0.1, 0.5),
+		random.gaussian_logprob(0.25, 0.1, 0.5),
+		random.gaussian_logprob(0.6, 0.1, 0.5)
 	},
 	{-0.2457913526447274, -0.27079135264472737, -0.7257913526447274})
 
 test("gamma sample",
 	 replicate(runs,
 	 	function() return mean(replicate(samples,
-	 		function() return gamma(2, 2)/10 end))
+	 		function() return gamma({2, 2})/10 end))
 	 	end),
 	0.4)
 
 mhtest(
 	"gamma query",
-	function() return gamma(2, 2)/10 end,
+	function() return gamma({2, 2})/10 end,
 	0.4)
 
 eqtest(
 	"gamma lp",
 	{
-		gamma_logprob(1, 2, 2),
-		gamma_logprob(4, 2, 2),
-		gamma_logprob(8, 2, 2)
+		random.gamma_logprob(1, 2, 2),
+		random.gamma_logprob(4, 2, 2),
+		random.gamma_logprob(8, 2, 2)
 	},
 	{-1.8862944092546166, -2.000000048134726, -3.306852867574781})
 
 test("beta sample",
 	 replicate(runs,
 	 	function() return mean(replicate(samples,
-	 		function() return beta(2, 5) end))
+	 		function() return beta({2, 5}) end))
 	 	end),
 	2.0/(2+5))
 
 mhtest(
 	"beta query",
-	function() return beta(2, 5) end,
+	function() return beta({2, 5}) end,
 	2.0/(2+5))
 
 eqtest(
 	"beta lp",
 	{
-		beta_logprob(.1, 2, 5),
-		beta_logprob(.2, 2, 5),
-		beta_logprob(.6, 2, 5)
+		random.beta_logprob(.1, 2, 5),
+		random.beta_logprob(.2, 2, 5),
+		random.beta_logprob(.6, 2, 5)
 	},
 	{0.677170196389683, 0.899185234324094, -0.7747911992475776})
 
 test("binomial sample",
 	 replicate(runs,
 	 	function() return mean(replicate(samples,
-	 		function() return binomial(.5, 40)/40 end))
+	 		function() return binomial({.5, 40})/40 end))
 	 	end),
 	0.5)
 
 mhtest(
 	"binomial query",
-	function() return binomial(.5, 40)/40 end,
+	function() return binomial({.5, 40})/40 end,
 	0.5)
 
 eqtest(
 	"binomial lp",
 	{
-		binomial_logprob(15, .5, 40),
-		binomial_logprob(20, .5, 40),
-		binomial_logprob(30, .5, 40)
+		random.binomial_logprob(15, .5, 40),
+		random.binomial_logprob(20, .5, 40),
+		random.binomial_logprob(30, .5, 40)
 	},
 	{-3.3234338674089985, -2.0722579911387817, -7.2840211276953575})
 
 test("poisson sample",
 	 replicate(runs,
 	 	function() return mean(replicate(samples,
-	 		function() return poisson(4)/10 end))
+	 		function() return poisson({4})/10 end))
 	 	end),
 	0.4)
 
 mhtest(
 	"poisson query",
-	function() return poisson(4)/10 end,
+	function() return poisson({4})/10 end,
 	0.4)
 
 eqtest(
 	"poisson lp",
 	{
-		poisson_logprob(2, 4),
-		poisson_logprob(5, 4),
-		poisson_logprob(7, 4)
+		random.poisson_logprob(2, 4),
+		random.poisson_logprob(5, 4),
+		random.poisson_logprob(7, 4)
 	},
 	{-1.9205584583201643, -1.8560199371825927, -2.821100833226181})
 
@@ -218,7 +219,7 @@ mhtest(
 	"setting a flip",
 	function()
 		local a = 1 / 1000
-		condition(int2bool(flip(a)))
+		condition(int2bool(flip({a})))
 		--condition(flip(a))
 		return a
 	end,
@@ -228,8 +229,8 @@ mhtest(
 mhtest(
 	"and conditioned on or",
 	function()
-		local a = int2bool(flip())
-		local b = int2bool(flip())
+		local a = int2bool(flip({0.5}))
+		local b = int2bool(flip({0.5}))
 		condition(a or b)
 		return bool2int(a and b)
 	end,
@@ -238,8 +239,8 @@ mhtest(
 mhtest(
 	"and conditioned on or, biased flip",
 	function()
-		local a = int2bool(flip(0.3))
-		local b = int2bool(flip(0.3))
+		local a = int2bool(flip({0.3}))
+		local b = int2bool(flip({0.3}))
 		condition(a or b)
 		return bool2int(a and b)
 	end,
@@ -248,8 +249,8 @@ mhtest(
 mhtest(
 	"contitioned flip",
 	function()
-		local bitflip = function(fidelity, x) return flip(int2bool(x) and fidelity or 1-fidelity) end
-		local hyp = flip(0.7)
+		local bitflip = function(fidelity, x) return flip({int2bool(x) and fidelity or 1-fidelity}) end
+		local hyp = flip({0.7})
 		condition(int2bool(bitflip(0.8, hyp)))
 		return hyp
 	end,
@@ -258,23 +259,23 @@ mhtest(
 mhtest(
 	"random 'if' with random branches, unconditioned",
 	function()
-		if int2bool(flip(0.7)) then
-			return flip(0.2)
+		if int2bool(flip({0.7})) then
+			return flip({0.2})
 		else
-			return flip(0.8)
+			return flip({0.8})
 		end
 	end,
 	0.7*0.2 + 0.3*0.8)
 
 mhtest(
 	"flip with random weight, unconditioned",
-	function() return flip(int2bool(flip(0.7)) and 0.2 or 0.8) end,
+	function() return flip({int2bool(flip({0.7})) and 0.2 or 0.8}) end,
 	0.7*0.2 + 0.3*0.8)
 
 mhtest(
 	"random procedure application, unconditioned",
 	function()
-		local proc = int2bool(flip(0.7)) and (function(x) return flip(0.2) end) or (function(x) return flip(0.8) end)
+		local proc = int2bool(flip({0.7})) and (function(x) return flip({0.2}) end) or (function(x) return flip({0.8}) end)
 		return proc(1)
 	end,
 	0.7*0.2 + 0.3*0.8)
@@ -284,7 +285,7 @@ mhtest(
 	function()
 		local hyp = multinomialDraw({"b", "c", "d"}, {0.1, 0.6, 0.3})
 		local function observe(x)
-			if int2bool(flip(0.8)) then
+			if int2bool(flip({0.8})) then
 				return x
 			else
 				return "b"
@@ -299,7 +300,7 @@ mhtest(
 	"recursive stochastic fn, unconditioned (tail recursive)",
 	function()
 		local function powerLaw(prob, x)
-			if int2bool(flip(prob, true)) then
+			if int2bool(flip({prob}, {isStructural=true})) then
 				return x
 			else
 				return powerLaw(prob, x+1)
@@ -314,7 +315,7 @@ mhtest(
 	"recursive stochastic fn, unconditioned",
 	function()
 		local function powerLaw(prob, x)
-			if int2bool(flip(prob, true)) then
+			if int2bool(flip({prob}, {isStructural=true})) then
 				return x
 			else
 				return 0 + powerLaw(prob, x+1)
@@ -328,7 +329,7 @@ mhtest(
 mhtest(
 	"memoized flip, unconditioned",
 	function()
-		local proc = mem(function(x) return int2bool(flip(0.8)) end)
+		local proc = mem(function(x) return int2bool(flip({0.8})) end)
 		local p11 = proc(1)
 		local p21 = proc(2)
 		local p12 = proc(1)
@@ -340,7 +341,7 @@ mhtest(
 mhtest(
 	"memoized flip, conditioned",
 	function()
-		local proc = mem(function(x) return int2bool(flip(0.2)) end)
+		local proc = mem(function(x) return int2bool(flip({0.2})) end)
 		local p1 = proc(1)
 		local p21 = proc(2)
 		local p22 = proc(2)
@@ -353,7 +354,7 @@ mhtest(
 mhtest(
 	"bound symbol used inside memoizer, unconditioned",
 	function()
-		local a = flip(0.8)
+		local a = flip({0.8})
 		local proc = mem(function(x) return int2bool(a) end)
 		local p11 = proc(1)
 		local p12 = proc(1)
@@ -364,9 +365,9 @@ mhtest(
 mhtest(
 	"memoized flip with random argument, unconditioned",
 	function()
-		local proc = mem(function(x) return int2bool(flip(0.8)) end)
-		local p1 = proc(uniformDraw({1,2,3}, true))
-		local p2 = proc(uniformDraw({1,2,3}, true))
+		local proc = mem(function(x) return int2bool(flip({0.8})) end)
+		local p1 = proc(uniformDraw({1,2,3}, {isStructural=true}))
+		local p2 = proc(uniformDraw({1,2,3}, {isStructural=true}))
 		return bool2int(p1 and p2)
 	end,
 	0.6933333333333334)
@@ -374,9 +375,9 @@ mhtest(
 mhtest(
 	"memoized random procedure, unconditioned",
 	function()
-		local proc = int2bool(flip(0.7)) and
-			(function(x) return int2bool(flip(0.2)) end) or
-			(function(x) return int2bool(flip(0.8)) end)
+		local proc = int2bool(flip({0.7})) and
+			(function(x) return int2bool(flip({0.2})) end) or
+			(function(x) return int2bool(flip({0.8})) end)
 		local memproc = mem(proc)
 		local mp1 = memproc(1)
 		local mp2 = memproc(2)
@@ -388,10 +389,10 @@ mhtest(
 	"mh-query over rejection query for conditioned flip",
 	function()
 		local function bitflip(fidelity, x)
-			return int2bool(flip(x and fidelity or 1-fidelity))
+			return int2bool(flip({x and fidelity or 1-fidelity}))
 		end
 		local function innerQuery()
-			local a = int2bool(flip(0.7))
+			local a = int2bool(flip({0.7}))
 			condition(bitflip(0.8, a))
 			return bool2int(a)
 		end
@@ -402,8 +403,8 @@ mhtest(
 mhtest(
 	"trans-dimensional",
 	function()
-		local a = int2bool(flip(0.9, true)) and beta(1,5) or 0.7
-		local b = flip(a)
+		local a = int2bool(flip({0.9}, {isStructural=true})) and beta({1,5}) or 0.7
+		local b = flip({a})
 		condition(int2bool(b))
 		return a
 	end,
@@ -412,8 +413,8 @@ mhtest(
 larjtest(
 	"trans-dimensional (LARJ)",
 	function()
-		local a = int2bool(flip(0.9, true)) and beta(1,5) or 0.7
-		local b = flip(a)
+		local a = int2bool(flip({0.9}, {isStructural=true})) and beta({1,5}) or 0.7
+		local b = flip({a})
 		condition(int2bool(b))
 		return a
 	end,
@@ -422,8 +423,8 @@ larjtest(
 mhtest(
 	"memoized flip in if branch (create/destroy memprocs), unconditioned",
 	function()
-		local a = int2bool(flip()) and mem(flip) or mem(flip)
-		local b = a()
+		local a = int2bool(flip({0.5})) and mem(flip) or mem(flip)
+		local b = a({0.5})
 		return b
 	end,
 	0.5)
@@ -435,7 +436,7 @@ mhtest(
 	function()
 		local accum = 0
 		for i=1,4 do
-			accum = accum + flip()
+			accum = accum + flip({0.5})
 		end
 		return accum / 4
 	end,
@@ -447,9 +448,9 @@ mhtest(
 		local accum = 0
 		for i=1,10 do
 			if i < 5 then
-				accum = accum + flip(0.5, false, 1)
+				accum = accum + flip({0.5}, {conditionedValue=1})
 			else
-				accum = accum + flip(0.5)
+				accum = accum + flip({0.5})
 			end 
 		end
 		return accum / 10
@@ -465,7 +466,7 @@ if terralib then
 		customtest(
 			name,
 			function()
-				return gaussian(0.1, 0.5)
+				return gaussian({0.1, 0.5})
 			end,
 			0.1,
 			errorTolerance,
@@ -479,10 +480,10 @@ if terralib then
 		customtest(
 			name,
 			function()
-				local num = uniformDraw({1, 2}, true)
+				local num = uniformDraw({1, 2}, {isStructural=true})
 				local gs = {}
 				for i=1,num do
-					table.insert(gs, gaussian(0.1, 0.5))
+					table.insert(gs, gaussian({0.1, 0.5}))
 				end
 				return gs[1]
 			end, 
@@ -498,13 +499,13 @@ if terralib then
 		customtest(
 			name,
 			function()
-				local num = uniformDraw({1, 2}, true)
+				local num = uniformDraw({1, 2}, {isStructural=true})
 				local gs = {}
 				for i=1,num do
-					table.insert(gs, gaussian(0.1, 0.5))
+					table.insert(gs, gaussian({0.1, 0.5}))
 				end
 				return gs[1]
-			end,
+			end, 
 			0.1,
 			errorTolerance,
 			sampler,

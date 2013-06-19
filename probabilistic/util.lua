@@ -38,7 +38,16 @@ function M.keys(tab)
 	return newtbl
 end
 
-function M.sum(tab)
+function M.sum(...)
+	local s = 0
+	local n = select("#", ...)
+	for i=1,n do
+		s = s + select(i, ...)
+	end
+	return s
+end
+
+function M.sumtable(tab)
 	local s = 0
 	for k,v in pairs(tab) do
 		s = s + v
