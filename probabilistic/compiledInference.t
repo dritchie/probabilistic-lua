@@ -1,5 +1,6 @@
 local util = require("probabilistic.util")
 local mt = terralib.require("probabilistic.mathtracing")
+local cmath = terralib.require("probabilistic.cmath")
 local inf = require("probabilistic.inference")
 
 
@@ -252,7 +253,6 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 end
 
 -- Terra version of erp.lua's "gaussian_sample"
-local cmath = terralib.includec("math.h")
 local cstdlib = terralib.includecstring [[
 	#include <stdlib.h>
 	#define FLT_RAND_MAX 0.999999

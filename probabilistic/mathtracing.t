@@ -1,10 +1,7 @@
 local util = require("probabilistic.util")
+local cmath = terralib.require("probabilistic.cmath")
 
 local IR = {}
-
--- TODO: Replace this with a table that overloads math functions appropriately
--- for AD dual number type
-local cmath = terralib.includec("math.h")
 
 -------------------------------
 --  Terra/C type conversions --

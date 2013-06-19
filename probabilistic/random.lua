@@ -159,7 +159,7 @@ local function binomial_logprob(s, p, n)
 	local T = n - s - inv2
 	local d1 = s + inv6 - (n + inv3) * p
 	local d2 = q/(s+inv2) - p/(T+inv2) + (q-inv2)/(n+1)
-	local d2 = d1 + 0.02*d2
+	d2 = d1 + 0.02*d2
 	local num = 1 + q * g(S/(n*p)) + p * g(T/(n*q))
 	local den = (n + inv6) * p * q
 	local z = num / den
@@ -246,7 +246,7 @@ end
 
 
 -- exports
-return 
+local random = 
 {
 	flip_sample = flip_sample,
 	flip_logprob = flip_logprob,
@@ -267,3 +267,20 @@ return
 	dirichlet_sample = dirichlet_sample,
 	dirichlet_logprob = dirichlet_logprob
 }
+
+
+-- If we're running under Terra, then use the compiled samplers/scorers
+-- instead of the interpreted ones below.
+local randomt = nil
+--randomt = util.guardedTerraRequire("probabilistic.random_terra")
+if randomt then
+	for name,fn in pairs(random) do
+		local tfn = randomt[name]
+		if tfn then
+			random[name] = tfn
+		end
+	end
+end
+
+
+return random

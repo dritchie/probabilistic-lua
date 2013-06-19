@@ -149,41 +149,41 @@ end
 
 --genCachePerfGraph("Tableau/cachePerf/cachePerf.csv", 7, 3, 1, 10000, 100000, 10000, 1.0, 0.001, 0.5)
 --genAnnealingPerfGraph("Tableau/annealingPerf/annealingPerf.csv", 10000, {3, 4, 5, 6, 7}, 10, 1000, 2)
-genProfilingStats("Tableau/profiling/profiling.csv", 100000, {3, 4, 5, 6, 7, 8, 9, 10}, 0.01, 3)
+--genProfilingStats("Tableau/profiling/profiling.csv", 100000, {3, 4, 5, 6, 7, 8, 9, 10}, 0.01, 3)
 
 -------
 
--- local numsamps = 100000
--- local numAnnealSteps = 10
--- local dots = 6
--- local dims = {4, 5, 6, 7, 8}
--- local fweight = 1.0
+local numsamps = 100000
+local numAnnealSteps = 10
+local dots = 6
+local dims = {4, 5, 6, 7, 8}
+local fweight = 1.0
 
--- local res = nil
+local res = nil
 
--- local t11 = os.clock()
--- --res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
--- --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
--- --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
--- local t12 = os.clock()
+local t11 = os.clock()
+--res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
+local t12 = os.clock()
 
--- local t21 = os.clock()
--- --res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
--- res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
--- --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
--- local t22 = os.clock()
+local t21 = os.clock()
+--res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
+local t22 = os.clock()
 
--- print(string.format("Uncompiled: %g", (t12 - t11)))
--- print(string.format("Compiled: %g", (t22 - t21)))
+print(string.format("Uncompiled: %g", (t12 - t11)))
+print(string.format("Compiled: %g", (t22 - t21)))
 
 
--- local function saveDotCSV(points, filename)
--- 	local f = io.open(filename, "w")
--- 	f:write("dotnum,x,y\n")
--- 	for i,p in ipairs(points) do
--- 		f:write(string.format("%u,%g,%g\n", i, p.x, p.y))
--- 	end
--- 	f:close()
--- end
+local function saveDotCSV(points, filename)
+	local f = io.open(filename, "w")
+	f:write("dotnum,x,y\n")
+	for i,p in ipairs(points) do
+		f:write(string.format("%u,%g,%g\n", i, p.x, p.y))
+	end
+	f:close()
+end
 
--- saveDotCSV(res, "Tableau/dotvis/dots.csv")
+saveDotCSV(res, "Tableau/dotvis/dots.csv")
