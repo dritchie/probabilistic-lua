@@ -344,10 +344,10 @@ end
 -- The final statement in a function with return values
 IR.ReturnStatement = {}
 
-function IR.ReturnStatement:new(exp)
+function IR.ReturnStatement:new(exps)
 	local newobj = 
 	{
-		exp = exp
+		exps = exps
 	}
 	setmetatable(newobj, self)
 	self.__index = self
@@ -355,21 +355,28 @@ function IR.ReturnStatement:new(exp)
 end
 
 function IR.ReturnStatement:childNodes()
-	return {self.exp}
+	return self.exps
 end
 
 function IR.ReturnStatement:__tostring(tablevel)
 	tablevel = tablevel or 0
-	return util.tabify(string.format("IR.ReturnStatement:\n%s", self.exp:__tostring(tablevel+1)), tablevel)
+	--return util.tabify(string.format("IR.ReturnStatement:\n%s", self.exp:__tostring(tablevel+1)), tablevel)
+	local str = util.tabify("IR.ReturnStatement:", tablevel)
+	for i,e in ipairs(self.exps) do
+		str = string.format("%s\n%s", str, util.tabify(e:__tostring(tablevel+1)))
+	end
+	return str
 end
 
 function IR.ReturnStatement:emitCCode()
-	return string.format("return %s;", self.exp:emitCCode())
+	assert(table.getn(self.exps) == 1)	-- We fail on more than one return value for C Code
+	return string.format("return %s;", self.exps[1]:emitCCode())
 end
 
 function IR.ReturnStatement:emitTerraCode()
+	local expscode = util.map(function(e) return e:emitTerraCode() end, self.exps)
 	return quote
-		return [self.exp:emitTerraCode()]
+		return [expscode]
 	end
 end
 
@@ -841,11 +848,10 @@ local function compileLogProbTrace(probTrace)
 	-- Now trace
 	local traceCopy = probTrace:deepcopy()	-- since tracing clobbers a bunch of stuff
 	on()
-	traceCopy:traceUpdate(true)
-	local expr = traceCopy.logprob
+	local exprs = {traceCopy:traceLogprobExp()}
 	off()
 	-- Now do compilation
-	table.insert(trace.statements, IR.ReturnStatement:new(expr))
+	table.insert(trace.statements, IR.ReturnStatement:new(exprs))
 	local params = findNamedParameters(trace)
 	local fnargs = {randomVarsNode}
 	util.appendarray(params, fnargs)
@@ -855,9 +861,6 @@ local function compileLogProbTrace(probTrace)
 	prof.startTimer("LogProbAssemble")
 	local cfn = fn:emitTerraCode()
 	prof.stopTimer("LogProbAssemble")
-	prof.startTimer("LogProbCompile")
-	cfn:compile()
-	prof.stopTimer("LogProbCompile")
 
 	return cfn, params
 end

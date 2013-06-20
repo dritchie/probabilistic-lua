@@ -156,6 +156,26 @@ function M.guardedTerraRequire(filename)
 	end
 end
 
+function M.addReadonlyProperty(class, name, propfn)
+	if not class.properties then
+		class.properties = {}
+	end
+	class.properties[name] = propfn
+	class.__index = function(self, key)
+		local v = class[key]
+		if v ~= nil then
+			return v
+		else
+			local propfn = class.properties[key]
+			if propfn then
+				return propfn(self)
+			else
+				return nil
+			end
+		end
+	end
+end
+
 -- Rudimentary cumulative timer class
 M.Timer = {}
 

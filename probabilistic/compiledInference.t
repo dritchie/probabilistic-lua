@@ -1,48 +1,28 @@
 local util = require("probabilistic.util")
 local mt = terralib.require("probabilistic.mathtracing")
 local cmath = terralib.require("probabilistic.cmath")
+local trace = require("probabilistic.trace")
 local inf = require("probabilistic.inference")
 local prof = require("probabilistic.profiling")
 
 
--- Internal sampler state for compiled kernels
-local CompiledTraceState = 
-{
-	properties = 
-	{
-		-- Construct the return value of the computation only
-		-- if/when it is requested.
-		returnValue =
-		function(self)
-			if not self.retval then
-				local nonStructNames = self.trace:freeVarNames(false, true)
-				for i,n in ipairs(nonStructNames) do
-					self.trace:getRecord(n):setProp("val", self.varVals[i-1])
-				end
-				-- We don't need to evaluate expensive factors just to reconstruct
-				-- the return value
-				self.trace:toggleFactorEval(false)
-				self.trace:traceUpdate(true)
-				self.trace:toggleFactorEval(true)
-				self.retval = self.trace.returnValue
-			end
-			return self.retval
-		end
-	}
-}
+-- Internal sampler state for compiled trace
+local CompiledTraceState = {}
 
-function CompiledTraceState:__index(key)
-	local v = CompiledTraceState[key]
-	if v ~= nil then
-		return v
-	else
-		local propfn = CompiledTraceState.properties[key]
-		if propfn then
-			return propfn(self)
-		else
-			return nil
+local function computeReturnValueOnDemand(self)
+	if not self.retval then
+		local nonStructNames = self.trace:freeVarNames(false, true)
+		for i,n in ipairs(nonStructNames) do
+			self.trace:getRecord(n):setProp("val", self.varVals[i-1])
 		end
+		-- We don't need to evaluate expensive factors just to reconstruct
+		-- the return value
+		self.trace:toggleFactorEval(false)
+		self.trace:traceUpdate(true)
+		self.trace:toggleFactorEval(true)
+		self.retval = self.trace.returnValue
 	end
+	return self.retval
 end
 
 function CompiledTraceState:new(trace, other)
@@ -51,7 +31,6 @@ function CompiledTraceState:new(trace, other)
 		newobj = 
 		{
 			trace = trace,
-			logprob = other.logprob,
 			numVars = other.numVars,
 			varVals = terralib.new(double[other.numVars], other.varVals)
 		}
@@ -61,7 +40,6 @@ function CompiledTraceState:new(trace, other)
 		newobj = 
 		{
 			trace = trace,
-			logprob = trace.logprob,
 			numVars = numNonStruct,
 			varVals = terralib.new(double[numNonStruct])
 		}
@@ -72,6 +50,109 @@ function CompiledTraceState:new(trace, other)
 	setmetatable(newobj, self)
 	return newobj
 end
+
+-- Internal sampler state for normal (single) compiled traces
+local SingleCompiledTraceState = {}
+setmetatable(SingleCompiledTraceState, {__index = CompiledTraceState})
+
+util.addReadonlyProperty(SingleCompiledTraceState, "returnValue", computeReturnValueOnDemand)
+
+function SingleCompiledTraceState:new(trace, other)
+	local newobj = CompiledTraceState.new(self, trace, other)
+	if other then
+		newobj.logprob = other.logprob
+	else
+		newobj.logprob = trace.logprob
+	end
+	return newobj
+end
+
+function SingleCompiledTraceState:setLogprob(lpdata)
+	self.logprob = lpdata.logprob
+end
+
+-- Make the trace know how to convert itself into a compiled state
+function trace.RandomExecutionTrace:newCompiledState(other)
+	return SingleCompiledTraceState:new(self, other)
+end
+
+-- Make the trace know how to generate the IR for its logprob expression(s)
+function trace.RandomExecutionTrace:traceLogprobExp()
+	self:traceUpdate(true)
+	return self.logprob
+end
+
+-- The state may need to do some extra work to the compiled logprob function
+function SingleCompiledTraceState:finalizeLogprobFn(lpfn, paramVars)
+	local arglist = util.map(function(v) return v.value end, paramVars)
+	local realnum = mt.realNumberType()
+	local struct LPData { logprob: realnum }
+	local terra lpWrapper(vals: &realnum, [arglist])
+		var lpd: LPData
+		lpd.logprob = lpfn(vals, [arglist])
+		return lpd
+	end
+	return lpWrapper, paramVars
+end
+
+
+-- Internal sampler state for LARJ annealing compiled traces
+LARJInterpolationCompiledTraceState = {}
+setmetatable(LARJInterpolationCompiledTraceState, {__index = CompiledTraceState})
+
+util.addReadonlyProperty(LARJInterpolationCompiledTraceState, "returnValue", computeReturnValueOnDemand)
+util.addReadonlyProperty(LARJInterpolationCompiledTraceState, "logprob",
+	function(self)
+		local a = self.trace.alpha:getValue()
+		return (1-a)*self.logprob1 + a*self.logprob2
+	end
+)
+
+function LARJInterpolationCompiledTraceState:new(trace, other)
+	local newobj = CompiledTraceState.new(self, trace, other)
+	if other then
+		newobj.logprob1 = other.logprob1
+		newobj.logprob2 = other.logprob2
+	else
+		newobj.logprob1 = trace.trace1.logprob
+		newobj.logprob2 = trace.trace2.logprob
+	end
+	return newobj
+end
+
+function LARJInterpolationCompiledTraceState:setLogprob(lpdata)
+	self.logprob1 = lpdata.logprob1
+	self.logprob2 = lpdata.logprob2
+end
+
+-- Make the trace know how to convert itself into a compiled state
+function inf.LARJInterpolationTrace:newCompiledState(other)
+	return LARJInterpolationCompiledTraceState:new(self, other)
+end
+
+-- Make the trace know how to generate the IR for its logprob expression(s)
+function inf.LARJInterpolationTrace:traceLogprobExp()
+	self:traceUpdate(true)
+	return self.trace1.logprob, self.trace2.logprob
+end
+
+-- The state may need to do some extra work to the compiled logprob function
+function LARJInterpolationCompiledTraceState:finalizeLogprobFn(lpfn, paramVars)
+	local realnum = mt.realNumberType()
+	local arglist = util.map(function(v) return v.value end, paramVars)
+	local lpAlpha = self.trace.alpha:getIRNode()
+	table.insert(paramVars, lpAlpha)
+	local arglistWithAlpha = util.map(function(v) return v.value end, paramVars)
+	local struct LPData { logprob: realnum, logprob1: realnum, logprob2: realnum }
+	local terra lpWrapper(vals: &realnum, [arglistWithAlpha])
+		var lpd : LPData
+		lpd.logprob1, lpd.logprob2 = lpfn(vals, [arglist])
+		lpd.logprob = (1.0 - [lpAlpha.value])*lpd.logprob1 + [lpAlpha.value]*lpd.logprob2
+		return lpd
+	end
+	return lpWrapper, paramVars
+end
+
 
 
 -- A cache for compiled traces
@@ -171,11 +252,11 @@ end
 function CompiledGaussianDriftKernel:assumeControl(currTrace)
 	-- Translate trace into internal state
 	prof.startTimer("TraceToStateConversion")
-	local currState = CompiledTraceState:new(currTrace)
+	local currState = currTrace:newCompiledState()
 	prof.stopTimer("TraceToStateConversion")
 
 	-- Check for structure change/need recompile
-	self:compile(currTrace)
+	self:compile(currState)
 
 	return currState
 end
@@ -197,22 +278,23 @@ end
 
 function CompiledGaussianDriftKernel:next(currState, hyperparams)
 	-- Create a new state to transition to
-	local newState = CompiledTraceState:new(currState.trace, currState)
+	local newState = currState.trace:newCompiledState(currState)
 
 	-- Call the step function to advance the state
 	local accepted = false
-	newState.logprob, accepted = self.currStepFn(newState, hyperparams)
-
-	-- Update analytics and continue
+	local newLPdata = nil
+	accepted, newLPdata = self.currStepFn(newState, hyperparams)
 	self.proposalsMade = self.proposalsMade + 1
 	accepted = util.int2bool(accepted)
 	if accepted then
+		newState:setLogprob(newLPdata)
 		self.proposalsAccepted = self.proposalsAccepted + 1
 	end
 	return newState
 end
 
-function CompiledGaussianDriftKernel:compile(currTrace)
+function CompiledGaussianDriftKernel:compile(currState)
+	local currTrace = currState.trace
 	local sigs = currTrace:structuralSignatures()
 	-- Look for an already-compiled trace in the cache
 	prof.startTimer("CacheLookup")
@@ -221,13 +303,14 @@ function CompiledGaussianDriftKernel:compile(currTrace)
 	if fn then
 		self.currStepFn = fn
 	else
-		self:doCompile(currTrace)
+		self:doCompile(currState)
 		self.compileCache:add(sigs, self.currStepFn)
 	end
 	self.currStructuralSigs = sigs
 end
 
-function CompiledGaussianDriftKernel:doCompile(currTrace)
+function CompiledGaussianDriftKernel:doCompile(currState)
+	local currTrace = currState.trace
 
 	-- Get the proposal bandwidth of each nonstructural
 	local nonStructVars = currTrace:freeVarNames(false, true)
@@ -246,6 +329,10 @@ function CompiledGaussianDriftKernel:doCompile(currTrace)
 	local fn = nil
 	local paramVars = nil
 	fn, paramVars = mt.compileLogProbTrace(currTrace)
+	prof.startTimer("LogProbCompile")
+	fn, paramVars = currState:finalizeLogprobFn(fn, paramVars)
+	fn:compile()
+	prof.stopTimer("LogProbCompile")
 
 	-- Generate a specialized step function
 	prof.startTimer("StepFunctionCompile")
@@ -257,10 +344,10 @@ end
 local cstdlib = terralib.includecstring [[
 	#include <stdlib.h>
 	#define FLT_RAND_MAX 0.999999
-	double random() { return ((double)(rand()) / RAND_MAX)*FLT_RAND_MAX; }
+	double random_() { return ((double)(rand()) / RAND_MAX)*FLT_RAND_MAX; }
 ]]
---local random = cstdlib.random
-local random = terralib.cast({} -> double, math.random)
+local random = cstdlib.random_
+--local random = terralib.cast({} -> double, math.random)
 local terra gaussian_sample(mu : double, sigma: double) : double
 	var u : double
 	var v : double
@@ -277,6 +364,7 @@ local terra gaussian_sample(mu : double, sigma: double) : double
 	return mu + sigma*v/u
 end
 
+local C = terralib.includec("stdio.h")
 function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, bandwidths)
 	-- Additional argument list
 	local arglist = util.map(function(v) return v.value end, paramVars)
@@ -293,12 +381,12 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 			vals[i] = newv
 
 			-- Accept/reject
-			var newLP = [lpfn](vals, [arglist])
-			if cmath.log(random()) < newLP - currLP then
-				return newLP, true
+			var lpdata = [lpfn](vals, [arglist])
+			if cmath.log(random()) < lpdata.logprob - currLP then
+				return true, lpdata
 			else
 				vals[i] = v
-				return currLP, false
+				return false, lpdata
 			end
 		end
 

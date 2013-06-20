@@ -345,7 +345,8 @@ end
 
 return
 {
-	lookupVariableValue= lookupVariableValue,
+	RandomExecutionTrace = RandomExecutionTrace,
+	lookupVariableValue = lookupVariableValue,
 	newTrace = newTrace,
 	factor = factor,
 	condition = condition

@@ -84,13 +84,17 @@ end
 
 function HyperParam:getValue()
 	if mt and mt.isOn() then
-		if not self.__value then
-			self.__value = mt.makeParameterNode(double, self.name)
-		end
-		return self.__value
+		return self:getIRNode()
 	else
 		return self.value
 	end
+end
+
+function HyperParam:getIRNode()
+	if not self.__value then
+		self.__value = mt.makeParameterNode(double, self.name)
+	end
+	return self.__value
 end
 
 
@@ -280,21 +284,17 @@ end
 
 
 -- Abstraction for the linear interpolation of two execution traces
-local LARJInterpolationTrace = {
-	properties = {
-		logprob = function(self)
-			local a = self.alpha:getValue()
-			return (1-a)*self.trace1.logprob + a*self.trace2.logprob
-		end,
-		conditionsSatisfied = function(self) return self.trace1.conditionsSatisfied and self.trace2.conditionsSatisfied end,
-		returnValue = function(self) return trace2.returnValue end
-	}
-}
+local LARJInterpolationTrace = {}
 
-function LARJInterpolationTrace:__index(key)
-	local v = LARJInterpolationTrace[key]
-	return v ~= nil and v or LARJInterpolationTrace.properties[key](self)
-end
+util.addReadonlyProperty(LARJInterpolationTrace, "logprob",
+	function(self)
+		local a = self.alpha:getValue()
+		return (1-a)*self.trace1.logprob + a*self.trace2.logprob
+	end)
+util.addReadonlyProperty(LARJInterpolationTrace, "conditionsSatisfied",
+	function(self) return self.trace1.conditionsSatisfied and self.trace2.conditionsSatisfied end)
+util.addReadonlyProperty(LARJInterpolationTrace, "returnValue",
+	function(self) return trace2.returnValue end)
 
 function LARJInterpolationTrace:new(trace1, trace2, alpha)
 	alpha = alpha or HyperParam:new("larjAnnealAlpha", 0)
@@ -485,6 +485,11 @@ function LARJKernel:jumpStep(currTrace)
 	local newNumVars = table.getn(newStructTrace:freeVarNames(true, true))
 	fwdPropLP = fwdPropLP + newStructTrace.newlogprob - math.log(oldNumVars)
 
+	-- for DEBUG output
+	local lps = {}
+	local acceptRejects = {}
+	local newLpWithoutAnnealing = newStructTrace.logprob
+
 	-- We only actually do annealing if we have any non-structural variables and we're
 	-- doing more than zero annealing steps
 	local annealingLpRatio = 0
@@ -500,10 +505,14 @@ function LARJKernel:jumpStep(currTrace)
 		self.isDiffusing = true
 
 		for aStep=0,self.annealSteps-1 do
+			local prevacc = self.diffusionKernel.proposalsAccepted
 			lerpTrace.alpha:setValue(aStep/(self.annealSteps-1))
+			table.insert(lps, lerpState.logprob)
 			annealingLpRatio = annealingLpRatio + lerpState.logprob
 			lerpState = self.diffusionKernel:next(lerpState, hyperparams)
+			table.insert(lps, lerpState.logprob)
 			annealingLpRatio = annealingLpRatio - lerpState.logprob
+			table.insert(acceptRejects, self.diffusionKernel.proposalsAccepted ~= prevacc)
 		end
 
 		lerpTrace = self.diffusionKernel:releaseControl(lerpState)
@@ -519,7 +528,39 @@ function LARJKernel:jumpStep(currTrace)
 	var = newStructTrace.vars[name]
 	local rvsPropLP = var.erp:logProposalProb(propval, origval, var.params) + oldStructTrace:lpDiff(newStructTrace) - math.log(newNumVars)
 	local acceptanceProb = newStructTrace.logprob - currTrace.logprob + rvsPropLP - fwdPropLP + annealingLpRatio
-	if newStructTrace.conditionsSatisfied and math.log(math.random()) < acceptanceProb then
+	local accepted = newStructTrace.conditionsSatisfied and math.log(math.random()) < acceptanceProb
+
+	-- DEBUG output
+	--if newStructTrace.logprob - currTrace.logprob > 0 then
+		-- print("---------------")
+		-- print(string.format("lpDiffWithoutAnnealing: %g", newLpWithoutAnnealing - currTrace.logprob))
+		-- print(string.format("lpDiffWithAnnealing: %g", newStructTrace.logprob - currTrace.logprob))
+		-- print(string.format("diffAnnealingMade: %g", newStructTrace.logprob - newLpWithoutAnnealing))
+		-- print(string.format("annealingLpRatio: %g", annealingLpRatio, newStructTrace.logprob - currTrace.logprob))
+	--end
+	--if accepted then
+		-- print("==========")
+		-- print("Old num nonstructs:", table.getn(oldStructTrace:freeVarNames(false, true)))
+		-- print("New num nonstructs:", table.getn(newStructTrace:freeVarNames(false, true)))
+		-- print("---annealing run---")
+		-- for i=0,table.getn(acceptRejects)-1 do
+		-- 	if acceptRejects[i+1] then
+		-- 		print(string.format("%g | %g (ACCEPT)", lps[2*i+1], lps[2*i+2]))
+		-- 	else
+		-- 		print(string.format("%g | %g (REJECT)", lps[2*i+1], lps[2*i+2]))
+		-- 	end
+		-- end
+		-- print("----------")
+		-- local totalaccepts = 0
+		-- for i,a in ipairs(acceptRejects) do
+		-- 	if a then totalaccepts = totalaccepts + 1 end
+		-- end
+		-- print(string.format("annealing accept ratio: %g", totalaccepts/self.annealSteps))
+		-- print(string.format("annealingLpRatio: %g", annealingLpRatio))
+		-- if accepted then print("ACCEPT") else print("REJECT") end
+	--end
+
+	if accepted then
 		self.jumpProposalsAccepted = self.jumpProposalsAccepted + 1
 		return newStructTrace
 	else
@@ -617,6 +658,7 @@ return
 	MAP = MAP,
 	rejectionSample = rejectionSample,
 	KernelParams = KernelParams,
+	LARJInterpolationTrace = LARJInterpolationTrace,
 	RandomWalkKernel = RandomWalkKernel,
 	LARJKernel = LARJKernel,
 	mcmc = mcmc,
