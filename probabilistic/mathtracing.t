@@ -2,6 +2,17 @@ local util = require("probabilistic.util")
 local cmath = terralib.require("probabilistic.cmath")
 local prof = require("probabilistic.profiling")
 
+
+-- What's the fundamental number type we're using?
+local realnumtype = double
+local function realNumberType()
+	return realnumtype
+end
+local function setRealNumberType(newnumtype)
+	realnumtype = newnumtype
+end
+
+
 local IR = {}
 
 -------------------------------
@@ -360,7 +371,6 @@ end
 
 function IR.ReturnStatement:__tostring(tablevel)
 	tablevel = tablevel or 0
-	--return util.tabify(string.format("IR.ReturnStatement:\n%s", self.exp:__tostring(tablevel+1)), tablevel)
 	local str = util.tabify("IR.ReturnStatement:", tablevel)
 	for i,e in ipairs(self.exps) do
 		str = string.format("%s\n%s", str, util.tabify(e:__tostring(tablevel+1)))
@@ -369,8 +379,19 @@ function IR.ReturnStatement:__tostring(tablevel)
 end
 
 function IR.ReturnStatement:emitCCode()
-	assert(table.getn(self.exps) == 1)	-- We fail on more than one return value for C Code
-	return string.format("return %s;", self.exps[1]:emitCCode())
+	if table.getn(self.exps) == 1 then
+		return string.format("return %s;", self.exps[1]:emitCCode())
+	else
+		-- We have to return a struct containing all the values
+		-- We assume that the IR.FunctionDefinition containing this statement
+		--   has set the 'rstructType' field on this table.
+		local str = string.format("%s retvals;", self.rstructType)
+		for i=1,table.getn(self.exps) do
+			str = string.format("%s\nretvals.val%d = %s;", str, i, self.exps[i]:emitCCode())
+		end
+		str = string.format("%s\nreturn retvals;", str)
+		return str
+	end
 end
 
 function IR.ReturnStatement:emitTerraCode()
@@ -480,12 +501,10 @@ IR.FunctionDefinition = {}
 
 -- 'args' is a list of IR.VarNodes
 -- 'body' is a block
--- 'rettype' is a Terra type
-function IR.FunctionDefinition:new(name, rettype, args, body)
+function IR.FunctionDefinition:new(name, args, body)
 	local newobj =
 	{
-		value = name,
-		rettype = rettype,
+		name = name,
 		args = args,
 		body = body
 	}
@@ -494,14 +513,26 @@ function IR.FunctionDefinition:new(name, rettype, args, body)
 	return newobj
 end
 
+function IR.FunctionDefinition:lastStatement()
+	return self.body.statements[table.getn(self.body.statements)]
+end
+
+function IR.FunctionDefinition:numReturnValues()
+	local last = self:lastStatement()
+	if util.inheritsFrom(last, IR.ReturnStatement) then
+		return table.getn(last.exps)
+	else
+		return 0
+	end
+end
+
 function IR.FunctionDefinition:childNodes()
 	return util.joinarrays(self.args, {self.body})
 end
 
 function IR.FunctionDefinition:__tostring(tablevel)
 	tablevel = tablevel or 0
-	local str = util.tabify(string.format("IR.FunctionDefinition: %s %s",
-		tostring(self.type), self.value), tablevel)
+	local str = util.tabify(string.format("IR.FunctionDefinition: %s", self.name), tablevel)
 	str = str .. util.tabify("\nargs:", tablevel+1)
 	for i,a in ipairs(self.args) do
 		str = str .. string.format("\n%s", a:__tostring(tablevel+2))
@@ -511,7 +542,26 @@ function IR.FunctionDefinition:__tostring(tablevel)
 end
 
 function IR.FunctionDefinition:emitCCode()
-	local str = string.format("%s %s(", tostring(IR.terraTypeToCType(self.rettype)), self.value)
+
+	local rettype = IR.terraTypeToCType(realnumtype)
+
+	local str = ""
+
+	-- We need to check if this function has a return statement with more than 1 value.
+	-- If it does, then we need to declare a struct that can hold those values
+	local numretvals = self:numReturnValues(0)
+	if numretvals > 1 then
+		local last = self:lastStatement()
+		rettype = string.format("returnStruct_%s", self.name)
+		last.rstructType = rettype
+		str = string.format("%stypedef struct\n{\n", str)
+		for i=1,numretvals do
+			str = string.format("%s    %s val%d;\n", str, IR.terraTypeToCType(realnumtype), i)
+		end
+		str = string.format("%s} %s;\n", str, rettype)
+	end
+
+	str = string.format("%s%s %s(", str, tostring(IR.terraTypeToCType(rettype)), self.name)
 	local numargs = table.getn(self.args)
 	for i,a in ipairs(self.args) do
 		local postfix = i == numargs and "" or ", "
@@ -691,9 +741,9 @@ addWrappedBinaryFuncs(irmath, {
 })
 
 
-------------------------------------
--- Publicly visible functionality --
-------------------------------------
+-----------------------------
+-- Putting it all together --
+-----------------------------
 
 -- A statement block that forms the current trace through the program
 local trace = nil
@@ -701,15 +751,6 @@ local trace = nil
 -- An IR expression which represents the array of random variable
 -- values that's the input to a compiled log probability function
 local randomVarsNode = nil
-
--- What's the fundamental number type we're using?
-local realnumtype = double
-local function realNumberType()
-	return realnumtype
-end
-local function setRealNumberType(newnumtype)
-	realnumtype = newnumtype
-end
 
 
 -- Create an IR node corresponding to a random variable with
@@ -826,6 +867,43 @@ local function findNamedParameters(root)
 	return visitor.vars
 end
 
+local function compileLogProbFunction(fnir, targetLang)
+	if targetLang == "Terra" then
+		prof.startTimer("LogProbAssemble")
+		local fn = fnir:emitTerraCode()
+		prof.stopTimer("LogProbAssemble")
+		return fn
+	elseif targetLang == "C" then
+		prof.startTimer("LogProbAssemble")
+		local code = string.format([[
+		#include <math.h>
+		%s
+		]], fnir:emitCCode())
+		prof.stopTimer("LogProbAssemble")
+		prof.startTimer("LogProbCompile")
+		local C = terralib.includecstring(code)
+		local fn = C[fnir.name]
+		local numretvals = fnir:numReturnValues()
+		if numretvals > 1 then
+			local rstructType = C[fnir:lastStatement().rstructType]
+			local args = util.map(function(arg) return arg.value end, fnir.args)
+			local function fields(structvar)
+				local retvals = {}
+				for i=1,numretvals do table.insert(retvals, `structvar.[rstructType.entries[i].field]) end
+				return retvals
+			end
+			fn = terra([args])
+				var retval = fn([args])
+				return [fields(retval)]
+			end
+		end
+		prof.stopTimer("LogProbCompile")
+		return fn
+	else
+		error("Unsupported target language")
+	end
+end
+
 -- Record and compile a trace of a log probability computation.
 -- Returns a compiled function, followed by all of the parameter
 --   variables found in the recorded trace.
@@ -855,13 +933,10 @@ local function compileLogProbTrace(probTrace)
 	local params = findNamedParameters(trace)
 	local fnargs = {randomVarsNode}
 	util.appendarray(params, fnargs)
-	local fnname = tostring(symbol())
-	local fn = IR.FunctionDefinition:new(fnname, realnumtype, fnargs, trace)
+	local fnname = string.format("logprob_%d", symbol().id)
+	local fnir = IR.FunctionDefinition:new(fnname, fnargs, trace)
 	prof.stopTimer("IRGeneration")
-	prof.startTimer("LogProbAssemble")
-	local cfn = fn:emitTerraCode()
-	prof.stopTimer("LogProbAssemble")
-
+	local cfn = compileLogProbFunction(fnir, "C")
 	return cfn, params
 end
 
@@ -890,7 +965,7 @@ local function compileTrace(expr)
 		table.insert(trace.statements, IR.ReturnStatement:new(expr))
 	end
 	local vars = findFreeVariables(trace)
-	local fn = IR.FunctionDefinition:new(nil, nil, vars, trace)
+	local fn = IR.FunctionDefinition:new(nil, vars, trace)
 	local cfn = fn:emitTerraCode()
 	--cfn:printpretty()
 	return cfn

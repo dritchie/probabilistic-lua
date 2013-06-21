@@ -485,10 +485,10 @@ function LARJKernel:jumpStep(currTrace)
 	local newNumVars = table.getn(newStructTrace:freeVarNames(true, true))
 	fwdPropLP = fwdPropLP + newStructTrace.newlogprob - math.log(oldNumVars)
 
-	-- for DEBUG output
-	local lps = {}
-	local acceptRejects = {}
-	local newLpWithoutAnnealing = newStructTrace.logprob
+	-- -- for DEBUG output
+	-- local lps = {}
+	-- local acceptRejects = {}
+	-- local newLpWithoutAnnealing = newStructTrace.logprob
 
 	-- We only actually do annealing if we have any non-structural variables and we're
 	-- doing more than zero annealing steps
@@ -505,14 +505,14 @@ function LARJKernel:jumpStep(currTrace)
 		self.isDiffusing = true
 
 		for aStep=0,self.annealSteps-1 do
-			local prevacc = self.diffusionKernel.proposalsAccepted
+			--local prevacc = self.diffusionKernel.proposalsAccepted
 			lerpTrace.alpha:setValue(aStep/(self.annealSteps-1))
-			table.insert(lps, lerpState.logprob)
+			--table.insert(lps, lerpState.logprob)
 			annealingLpRatio = annealingLpRatio + lerpState.logprob
 			lerpState = self.diffusionKernel:next(lerpState, hyperparams)
-			table.insert(lps, lerpState.logprob)
+			--table.insert(lps, lerpState.logprob)
 			annealingLpRatio = annealingLpRatio - lerpState.logprob
-			table.insert(acceptRejects, self.diffusionKernel.proposalsAccepted ~= prevacc)
+			--table.insert(acceptRejects, self.diffusionKernel.proposalsAccepted ~= prevacc)
 		end
 
 		lerpTrace = self.diffusionKernel:releaseControl(lerpState)
