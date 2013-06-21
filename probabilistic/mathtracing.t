@@ -12,6 +12,13 @@ local function setRealNumberType(newnumtype)
 	realnumtype = newnumtype
 end
 
+-- Compilation options --
+-------------------------
+-- Can be "C" or "Terra"
+local targetLang = "C"
+-- Can be "External" or "ThroughTerra" (only applies when targetLang = "C")
+local cCompiler = "External"
+
 
 local IR = {}
 
@@ -510,6 +517,13 @@ function IR.FunctionDefinition:new(name, args, body)
 	}
 	setmetatable(newobj, self)
 	self.__index = self
+
+	-- If we have more than one return value, then the return statement
+	-- needs to be modified to handle this
+	if newobj:numReturnValues() > 1 then
+		newobj:lastStatement().rstructType = newobj:cReturnType()
+	end
+	
 	return newobj
 end
 
@@ -523,6 +537,40 @@ function IR.FunctionDefinition:numReturnValues()
 		return table.getn(last.exps)
 	else
 		return 0
+	end
+end
+
+function IR.FunctionDefinition:cPrototype()
+	local str = string.format("%s %s(", tostring(IR.terraTypeToCType(self:cReturnType())), self.name)
+	local numargs = table.getn(self.args)
+	for i,a in ipairs(self.args) do
+		local postfix = i == numargs and "" or ", "
+		str = string.format("%s%s %s%s", str, tostring(IR.terraTypeToCType(a:type())), a:emitCCode(), postfix)
+	end
+	str = string.format("%s)", str)
+	return str
+end
+
+function IR.FunctionDefinition:cReturnType()
+	if self:numReturnValues() <= 1 then
+		return IR.terraTypeToCType(realnumtype)
+	else
+		return string.format("returnStruct_%s", self.name)
+	end
+end
+
+function IR.FunctionDefinition:cReturnTypeDefinition()
+	local numretvals = self:numReturnValues()
+	if numretvals <= 1 then
+		return ""
+	else
+		local rettype = self:cReturnType()
+		local str = "typedef struct\n{\n"
+		for i=1,numretvals do
+			str = string.format("%s    %s val%d;\n", str, IR.terraTypeToCType(realnumtype), i)
+		end
+		str = string.format("%s} %s;\n", str, rettype)
+		return str
 	end
 end
 
@@ -542,33 +590,7 @@ function IR.FunctionDefinition:__tostring(tablevel)
 end
 
 function IR.FunctionDefinition:emitCCode()
-
-	local rettype = IR.terraTypeToCType(realnumtype)
-
-	local str = ""
-
-	-- We need to check if this function has a return statement with more than 1 value.
-	-- If it does, then we need to declare a struct that can hold those values
-	local numretvals = self:numReturnValues(0)
-	if numretvals > 1 then
-		local last = self:lastStatement()
-		rettype = string.format("returnStruct_%s", self.name)
-		last.rstructType = rettype
-		str = string.format("%stypedef struct\n{\n", str)
-		for i=1,numretvals do
-			str = string.format("%s    %s val%d;\n", str, IR.terraTypeToCType(realnumtype), i)
-		end
-		str = string.format("%s} %s;\n", str, rettype)
-	end
-
-	str = string.format("%s%s %s(", str, tostring(IR.terraTypeToCType(rettype)), self.name)
-	local numargs = table.getn(self.args)
-	for i,a in ipairs(self.args) do
-		local postfix = i == numargs and "" or ", "
-		str = string.format("%s%s %s%s", str, tostring(IR.terraTypeToCType(a:type())), a:emitCCode(), postfix)
-	end
-	str = string.format("%s)\n{\n%s\n}\n", str, util.tabify(self.body:emitCCode(), 1))
-	return str
+	return string.format("%s\n{\n%s\n}\n", self:cPrototype(), util.tabify(self.body:emitCCode(), 1))
 end
 
 function IR.FunctionDefinition:emitTerraCode()
@@ -867,25 +889,64 @@ local function findNamedParameters(root)
 	return visitor.vars
 end
 
-local function compileLogProbFunction(fnir, targetLang)
-	if targetLang == "Terra" then
-		prof.startTimer("LogProbAssemble")
-		local fn = fnir:emitTerraCode()
-		prof.stopTimer("LogProbAssemble")
-		return fn
-	elseif targetLang == "C" then
-		prof.startTimer("LogProbAssemble")
-		local code = string.format([[
+local function compileCLogProbFunctionThroughTerra(fnir)
+	local code = string.format([[
 		#include <math.h>
 		%s
-		]], fnir:emitCCode())
-		prof.stopTimer("LogProbAssemble")
-		prof.startTimer("LogProbCompile")
-		local C = terralib.includecstring(code)
-		local fn = C[fnir.name]
+		%s
+	]], fnir:cReturnTypeDefinition(), fnir:emitCCode())
+	local C = terralib.includecstring(code)
+	return C[fnir.name]
+end
+
+local function compileCLogProbFunctionExternally(fnir)
+	local cppname = string.format("__%s.cpp", fnir.name)
+	local objname = string.gsub(cppname, ".cpp", ".obj")
+	local expname = string.gsub(cppname, ".cpp", ".exp")
+	local libname = string.gsub(cppname, ".cpp", ".lib")
+	local dllname = string.gsub(cppname, ".cpp", ".dll")
+	local code = string.format([[
+		#include <math.h>
+		extern "C" {
+		%s
+		__declspec(dllexport) %s
+		}
+	]], fnir:cReturnTypeDefinition(), fnir:emitCCode())
+	local srcfile = io.open(cppname, "w")
+	srcfile:write(code)
+	srcfile:close()
+	util.wait(string.format("cl %s /link /DLL /OUT:%s 2>&1", cppname, dllname))
+	local cdecs = string.format([[
+		%s
+		%s;
+	]], fnir:cReturnTypeDefinition(), fnir:cPrototype())
+	local C = terralib.includecstring(cdecs)
+	terralib.linklibrary(dllname)
+	local fn = C[fnir.name]
+	fn:compile()
+	util.wait(string.format("del %s 2>&1", cppname))
+	util.wait(string.format("del %s 2>&1", objname))
+	util.wait(string.format("del %s 2>&1", expname))
+	util.wait(string.format("del %s 2>&1", libname))
+	return fn
+end
+
+local function compileLogProbFunction(fnir, targetLang)
+	if targetLang == "Terra" then
+		local fn = fnir:emitTerraCode()
+		return fn
+	elseif targetLang == "C" then
+		local fn = nil
+		if cCompiler == "ThroughTerra" then
+			fn = compileCLogProbFunctionThroughTerra(fnir)
+		elseif cCompiler == "External" then
+			fn = compileCLogProbFunctionExternally(fnir)
+		else
+			error("Unsupported C Compiler")
+		end
 		local numretvals = fnir:numReturnValues()
 		if numretvals > 1 then
-			local rstructType = C[fnir:lastStatement().rstructType]
+			local rstructType = fn.definitions[1]:gettype().returns[1]
 			local args = util.map(function(arg) return arg.value end, fnir.args)
 			local function fields(structvar)
 				local retvals = {}
@@ -897,7 +958,6 @@ local function compileLogProbFunction(fnir, targetLang)
 				return [fields(retval)]
 			end
 		end
-		prof.stopTimer("LogProbCompile")
 		return fn
 	else
 		error("Unsupported target language")
@@ -936,7 +996,9 @@ local function compileLogProbTrace(probTrace)
 	local fnname = string.format("logprob_%d", symbol().id)
 	local fnir = IR.FunctionDefinition:new(fnname, fnargs, trace)
 	prof.stopTimer("IRGeneration")
-	local cfn = compileLogProbFunction(fnir, "C")
+	prof.startTimer("LogProbCompile")
+	local cfn = compileLogProbFunction(fnir, targetLang)
+	prof.stopTimer("LogProbCompile")
 	return cfn, params
 end
 
@@ -967,7 +1029,6 @@ local function compileTrace(expr)
 	local vars = findFreeVariables(trace)
 	local fn = IR.FunctionDefinition:new(nil, vars, trace)
 	local cfn = fn:emitTerraCode()
-	--cfn:printpretty()
 	return cfn
 end
 

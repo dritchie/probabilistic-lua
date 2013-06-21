@@ -176,6 +176,10 @@ function M.addReadonlyProperty(class, name, propfn)
 	end
 end
 
+function M.wait(procstr)
+	io.popen(procstr):read("*all")
+end
+
 -- Rudimentary cumulative timer class
 M.Timer = {}
 
