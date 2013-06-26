@@ -167,9 +167,9 @@ local t11 = os.clock()
 local t12 = os.clock()
 
 local t21 = os.clock()
---res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
 --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
-res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
 local t22 = os.clock()
 
 print(string.format("Uncompiled: %g", (t12 - t11)))
@@ -185,4 +185,4 @@ local function saveDotCSV(points, filename)
 	f:close()
 end
 
-saveDotCSV(res, "Tableau/dotvis/dots.csv")
+--saveDotCSV(res, "Tableau/dotvis/dots.csv")

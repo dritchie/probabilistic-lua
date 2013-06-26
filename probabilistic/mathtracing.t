@@ -17,7 +17,7 @@ end
 -- Can be "C" or "Terra"
 local targetLang = "C"
 -- Can be "External" or "ThroughTerra" (only applies when targetLang = "C")
-local cCompiler = "External"
+local cCompiler = "ThroughTerra"
 
 
 local IR = {}

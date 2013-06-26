@@ -240,6 +240,10 @@ function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSi
 		currStepFn = nil,
 		compileCache = CompiledTraceCache:new(cacheSize),
 
+		-- Stuff for abstracting the log prob function
+		currHyperParams = {},
+		currLpData = nil,
+
 		-- Analytics
 		proposalsMade = 0,
 		proposalsAccepted = 0
@@ -281,13 +285,11 @@ function CompiledGaussianDriftKernel:next(currState, hyperparams)
 	local newState = currState.trace:newCompiledState(currState)
 
 	-- Call the step function to advance the state
-	local accepted = false
-	local newLPdata = nil
-	accepted, newLPdata = self.currStepFn(newState, hyperparams)
+	local accepted = self.currStepFn(newState, hyperparams)
 	self.proposalsMade = self.proposalsMade + 1
 	accepted = util.int2bool(accepted)
 	if accepted then
-		newState:setLogprob(newLPdata)
+		newState:setLogprob(self.currLpData)
 		self.proposalsAccepted = self.proposalsAccepted + 1
 	end
 	return newState
@@ -332,11 +334,19 @@ function CompiledGaussianDriftKernel:doCompile(currState)
 	prof.startTimer("LogProbCompile")
 	fn, paramVars = currState:finalizeLogprobFn(fn, paramVars)
 	fn:compile()
+
+	-- Wrap the logprob function to abstract away the use of hyperparameters
+	-- and a structured return type
+	local fnwrapper = function(vals)
+		self.currLpData = fn(vals, unpack(self.currHyperParams))
+		return self.currLpData.logprob
+	end
+	local castedfn = terralib.cast({&double} -> {double}, fnwrapper)
 	prof.stopTimer("LogProbCompile")
 
 	-- Generate a specialized step function
 	prof.startTimer("StepFunctionCompile")
-	self.currStepFn = self:genStepFunction(numVars, paramVars, fn, bandwidths)
+	self.currStepFn = self:genStepFunction(numVars, paramVars, castedfn, bandwidths)
 	prof.stopTimer("StepFunctionCompile")
 end
 
@@ -364,14 +374,13 @@ local terra gaussian_sample(mu : double, sigma: double) : double
 	return mu + sigma*v/u
 end
 
-local C = terralib.includec("stdio.h")
 function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, bandwidths)
 	-- Additional argument list
 	local arglist = util.map(function(v) return v.value end, paramVars)
 
 	-- The compiled Terra function
 	local step = 
-		terra(vals: &double, currLP: double, [arglist])
+		terra(vals: &double, currLP: double)
 			-- Pick a random variable
 			var i = [int](random() * [numVars])
 			var v = vals[i]
@@ -381,12 +390,12 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 			vals[i] = newv
 
 			-- Accept/reject
-			var lpdata = [lpfn](vals, [arglist])
-			if cmath.log(random()) < lpdata.logprob - currLP then
-				return true, lpdata
+			var newLP = [lpfn](vals)
+			if cmath.log(random()) < newLP - currLP then
+				return true
 			else
 				vals[i] = v
-				return false, lpdata
+				return false
 			end
 		end
 
@@ -400,7 +409,8 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 		if hyperparams then
 			additionalArgs = util.map(function(pvar) return hyperparams[pvar:name()]:getValue() end, paramVars)
 		end
-		return step(state.varVals, state.logprob, unpack(additionalArgs))
+		self.currHyperParams = additionalArgs
+		return step(state.varVals, state.logprob)
 	end
 end
 
