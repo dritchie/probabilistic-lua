@@ -323,14 +323,26 @@ function CompiledGaussianDriftKernel:doCompile(currState)
 		bandwidths[i-1] = self.bandwidthMap[ann] or self.defaultBandwidth
 	end
 
+	-- Compile the log prob function
+	local lpfn
+	local paramVars
+	lpfn, paramVars = self:compileLogProbFunction(currState, double)
+
+	-- Generate a specialized step function
+	prof.startTimer("StepFunctionCompile")
+	self.currStepFn = self:wrapStepFunction(self:genStepFunction(numVars, lpfn, bandwidths), paramVars)
+	prof.stopTimer("StepFunctionCompile")
+end
+
+function CompiledGaussianDriftKernel:compileLogProbFunction(currState, realNumType)
 	-- Turn on mathtracing and run traceupdate to
 	-- generate IR for the log probability expression
 	-- Compile the log prob expression into a function and also get the
 	-- list of additional parameters expected by this function.
-	mt.setRealNumberType(double)
+	mt.setRealNumberType(realNumType)
 	local fn = nil
 	local paramVars = nil
-	fn, paramVars = mt.compileLogProbTrace(currTrace)
+	fn, paramVars = mt.compileLogProbTrace(currState.trace)
 	prof.startTimer("LogProbCompile")
 	fn, paramVars = currState:finalizeLogprobFn(fn, paramVars)
 	fn:compile()
@@ -344,10 +356,7 @@ function CompiledGaussianDriftKernel:doCompile(currState)
 	local castedfn = terralib.cast({&double} -> {double}, fnwrapper)
 	prof.stopTimer("LogProbCompile")
 
-	-- Generate a specialized step function
-	prof.startTimer("StepFunctionCompile")
-	self.currStepFn = self:genStepFunction(numVars, paramVars, castedfn, bandwidths)
-	prof.stopTimer("StepFunctionCompile")
+	return castedfn, paramVars
 end
 
 -- Terra version of erp.lua's "gaussian_sample"
@@ -374,10 +383,7 @@ local terra gaussian_sample(mu : double, sigma: double) : double
 	return mu + sigma*v/u
 end
 
-function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, bandwidths)
-	-- Additional argument list
-	local arglist = util.map(function(v) return v.value end, paramVars)
-
+function CompiledGaussianDriftKernel:genStepFunction(numVars, lpfn, bandwidths)
 	-- The compiled Terra function
 	local step = 
 		terra(vals: &double, currLP: double)
@@ -402,6 +408,10 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 	-- Compile it right now (for more accurate profiling info)
 	step:compile()
 
+	return step
+end
+
+function CompiledGaussianDriftKernel:wrapStepFunction(stepfn, paramVars)
 	-- A Lua wrapper around the Terra function that calls it with the appropriate
 	-- additional hyperparameters
 	return function(state, hyperparams)
@@ -410,7 +420,7 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, paramVars, lpfn, b
 			additionalArgs = util.map(function(pvar) return hyperparams[pvar:name()]:getValue() end, paramVars)
 		end
 		self.currHyperParams = additionalArgs
-		return step(state.varVals, state.logprob)
+		return stepfn(state.varVals, state.logprob)
 	end
 end
 
