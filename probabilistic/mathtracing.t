@@ -17,7 +17,7 @@ end
 -- Can be "C" or "Terra"
 local targetLang = "C"
 -- Can be "External" or "ThroughTerra" (only applies when targetLang = "C")
-local cCompiler = "ThroughTerra"
+local cCompiler = "External"
 
 
 local IR = {}
@@ -901,10 +901,7 @@ end
 
 local function compileCLogProbFunctionExternally(fnir)
 	local cppname = string.format("__%s.cpp", fnir.name)
-	local objname = string.gsub(cppname, ".cpp", ".obj")
-	local expname = string.gsub(cppname, ".cpp", ".exp")
-	local libname = string.gsub(cppname, ".cpp", ".lib")
-	local dllname = string.gsub(cppname, ".cpp", ".dll")
+	local soname = string.gsub(cppname, ".cpp", ".so")
 	local code = string.format([[
 		#include <math.h>
 		extern "C" {
@@ -915,19 +912,17 @@ local function compileCLogProbFunctionExternally(fnir)
 	local srcfile = io.open(cppname, "w")
 	srcfile:write(code)
 	srcfile:close()
-	util.wait(string.format("cl %s /link /DLL /OUT:%s 2>&1", cppname, dllname))
+	util.wait(string.format("clang -shared -O3 %s -o %s 2>&1", cppname, soname))
 	local cdecs = string.format([[
 		%s
 		%s;
 	]], fnir:cReturnTypeDefinition(), fnir:cPrototype())
 	local C = terralib.includecstring(cdecs)
-	terralib.linklibrary(dllname)
+	terralib.linklibrary(soname)
 	local fn = C[fnir.name]
 	fn:compile()
-	util.wait(string.format("del %s 2>&1", cppname))
-	util.wait(string.format("del %s 2>&1", objname))
-	util.wait(string.format("del %s 2>&1", expname))
-	util.wait(string.format("del %s 2>&1", libname))
+	util.wait(string.format("rm -f %s 2>&1", cppname))
+	util.wait(string.format("rm -f %s 2>&1", soname))
 	return fn
 end
 
