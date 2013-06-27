@@ -213,28 +213,16 @@ function CompiledTraceCache:evictLRU()
 end
 
 
--- An MCMC kernel that performs continuious gaussian drift
--- by JIT-compiling all proposal/probability calculations
--- into machine code
--- NOTE: This is a fixed-dimensionality inference kernel (it will not make
---    structural changes)
-local CompiledGaussianDriftKernel = {}
+-- Abstract base class for fixed-dimension MCMC kernels that perform inference
+-- by compiling traces
+local CompiledKernel = {}
 
 -- Default parameter values
-inf.KernelParams.bandwidthMap = {}
-inf.KernelParams.defaultBandwidth = 0.1
 inf.KernelParams.cacheSize = 10
 
--- 'bandwidthMap' stores a map from type identifiers to gaussian drift bandwidths
--- The type identifers are assumed to be used in the ERP 'annotation' fields
--- 'defaultBandwidth' is the bandwidth to use if an ERP has no type annotation
-function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSize)
+function CompiledKernel:new(cacheSize)
 	local newobj = 
 	{
-		-- Proposal bandwidth stuff
-		bandwidthMap = bandwidthMap,
-		defaultBandwidth = defaultBandwidth,
-
 		-- Current compiled stuff as well as cached compiled results
 		currStructuralSigs = {},
 		currStepFn = nil,
@@ -253,7 +241,7 @@ function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSi
 	return newobj
 end
 
-function CompiledGaussianDriftKernel:assumeControl(currTrace)
+function CompiledKernel:assumeControl(currTrace)
 	-- Translate trace into internal state
 	prof.startTimer("TraceToStateConversion")
 	local currState = currTrace:newCompiledState()
@@ -265,7 +253,7 @@ function CompiledGaussianDriftKernel:assumeControl(currTrace)
 	return currState
 end
 
-function CompiledGaussianDriftKernel:releaseControl(currState)
+function CompiledKernel:releaseControl(currState)
 	-- Make a new copy of the trace, since we might be modifying it
 	local newTrace = currState.trace:deepcopy()
 
@@ -280,7 +268,7 @@ function CompiledGaussianDriftKernel:releaseControl(currState)
 	return newTrace
 end
 
-function CompiledGaussianDriftKernel:next(currState, hyperparams)
+function CompiledKernel:next(currState, hyperparams)
 	-- Create a new state to transition to
 	local newState = currState.trace:newCompiledState(currState)
 
@@ -295,7 +283,7 @@ function CompiledGaussianDriftKernel:next(currState, hyperparams)
 	return newState
 end
 
-function CompiledGaussianDriftKernel:compile(currState)
+function CompiledKernel:compile(currState)
 	local currTrace = currState.trace
 	local sigs = currTrace:structuralSignatures()
 	-- Look for an already-compiled trace in the cache
@@ -309,6 +297,72 @@ function CompiledGaussianDriftKernel:compile(currState)
 		self.compileCache:add(sigs, self.currStepFn)
 	end
 	self.currStructuralSigs = sigs
+end
+
+function CompiledKernel:compileLogProbFunction(currState, realNumType)
+	-- Turn on mathtracing and run traceupdate to
+	-- generate IR for the log probability expression
+	-- Compile the log prob expression into a function and also get the
+	-- list of additional parameters expected by this function.
+	mt.setRealNumberType(realNumType)
+	local fn = nil
+	local paramVars = nil
+	fn, paramVars = mt.compileLogProbTrace(currState.trace)
+	prof.startTimer("LogProbCompile")
+	fn, paramVars = currState:finalizeLogprobFn(fn, paramVars)
+	fn:compile()
+
+	-- Wrap the logprob function to abstract away the use of hyperparameters
+	-- and a structured return type
+	local fnwrapper = function(vals)
+		self.currLpData = fn(vals, unpack(self.currHyperParams))
+		return self.currLpData.logprob
+	end
+	local castedfn = terralib.cast({&double} -> {double}, fnwrapper)
+	prof.stopTimer("LogProbCompile")
+
+	return castedfn, paramVars
+end
+
+function CompiledKernel:wrapStepFunction(stepfn, paramVars)
+	-- A Lua wrapper around the Terra function that calls it with the appropriate
+	-- additional hyperparameters
+	return function(state, hyperparams)
+		local additionalArgs = {}
+		if hyperparams then
+			additionalArgs = util.map(function(pvar) return hyperparams[pvar:name()]:getValue() end, paramVars)
+		end
+		self.currHyperParams = additionalArgs
+		return stepfn(state.varVals, state.logprob)
+	end
+end
+
+function CompiledKernel:stats()
+	print(string.format("Acceptance ratio: %g (%u/%u)", self.proposalsAccepted/self.proposalsMade,
+														self.proposalsAccepted, self.proposalsMade))
+end
+
+
+-- An MCMC kernel that performs continuious gaussian drift
+-- by JIT-compiling all proposal/probability calculations
+-- into machine code
+local CompiledGaussianDriftKernel = {}
+setmetatable(CompiledGaussianDriftKernel, {__index = CompiledKernel})
+
+-- Default parameter values
+inf.KernelParams.bandwidthMap = {}
+inf.KernelParams.defaultBandwidth = 0.1
+
+-- 'bandwidthMap' stores a map from type identifiers to gaussian drift bandwidths
+-- The type identifers are assumed to be used in the ERP 'annotation' fields
+-- 'defaultBandwidth' is the bandwidth to use if an ERP has no type annotation
+function CompiledGaussianDriftKernel:new(bandwidthMap, defaultBandwidth, cacheSize)
+	local newobj = CompiledKernel.new(self, cacheSize)
+
+	newobj.bandwidthMap = bandwidthMap
+	newobj.defaultBandwidth = defaultBandwidth
+
+	return newobj
 end
 
 function CompiledGaussianDriftKernel:doCompile(currState)
@@ -332,31 +386,6 @@ function CompiledGaussianDriftKernel:doCompile(currState)
 	prof.startTimer("StepFunctionCompile")
 	self.currStepFn = self:wrapStepFunction(self:genStepFunction(numVars, lpfn, bandwidths), paramVars)
 	prof.stopTimer("StepFunctionCompile")
-end
-
-function CompiledGaussianDriftKernel:compileLogProbFunction(currState, realNumType)
-	-- Turn on mathtracing and run traceupdate to
-	-- generate IR for the log probability expression
-	-- Compile the log prob expression into a function and also get the
-	-- list of additional parameters expected by this function.
-	mt.setRealNumberType(realNumType)
-	local fn = nil
-	local paramVars = nil
-	fn, paramVars = mt.compileLogProbTrace(currState.trace)
-	prof.startTimer("LogProbCompile")
-	fn, paramVars = currState:finalizeLogprobFn(fn, paramVars)
-	fn:compile()
-
-	-- Wrap the logprob function to abstract away the use of hyperparameters
-	-- and a structured return type
-	local fnwrapper = function(vals)
-		self.currLpData = fn(vals, unpack(self.currHyperParams))
-		return self.currLpData.logprob
-	end
-	local castedfn = terralib.cast({&double} -> {double}, fnwrapper)
-	prof.stopTimer("LogProbCompile")
-
-	return castedfn, paramVars
 end
 
 -- Terra version of erp.lua's "gaussian_sample"
@@ -409,24 +438,6 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, lpfn, bandwidths)
 	step:compile()
 
 	return step
-end
-
-function CompiledGaussianDriftKernel:wrapStepFunction(stepfn, paramVars)
-	-- A Lua wrapper around the Terra function that calls it with the appropriate
-	-- additional hyperparameters
-	return function(state, hyperparams)
-		local additionalArgs = {}
-		if hyperparams then
-			additionalArgs = util.map(function(pvar) return hyperparams[pvar:name()]:getValue() end, paramVars)
-		end
-		self.currHyperParams = additionalArgs
-		return stepfn(state.varVals, state.logprob)
-	end
-end
-
-function CompiledGaussianDriftKernel:stats()
-	print(string.format("Acceptance ratio: %g (%u/%u)", self.proposalsAccepted/self.proposalsMade,
-														self.proposalsAccepted, self.proposalsMade))
 end
 
 
