@@ -4,7 +4,7 @@ This file implements the HMC sampling library and is compiled into a shared libr
 
 #include "stan/agrad/agrad.hpp"
 #include "stan/model/prob_grad_ad.hpp"
-#include "stan/hmc/nuts.hpp"
+#include "stan/mcmc/nuts.hpp"
 
 #define EXPORT __declspec(dllexport)
 
@@ -53,7 +53,7 @@ extern "C"
 		s->model.setLogprobFunction(lpfn);
 	}
 
-	EXPORT setVariableValues(SamplerState* s, int numvals, double* vals)
+	EXPORT void setVariableValues(SamplerState* s, int numvals, double* vals)
 	{
 		std::vector<double> params_r(numvals);
 		memcpy(&params_r[0], vals, numvals*sizeof(double));
@@ -71,7 +71,7 @@ extern "C"
 		}
 	}
 
-	EXPORT nextSample(SamplerState* s, double* vals)
+	EXPORT int nextSample(SamplerState* s, double* vals)
 	{
 		size_t numparams = s->model.num_params_r();
 		stan::mcmc::sample samp = s->sampler->next();
@@ -85,7 +85,7 @@ extern "C"
 				break;
 			}
 		}
-		memcpy(vals, samp.params_r(), numparams*sizeof(double));
+		memcpy(vals, &(samp.params_r())[0], numparams*sizeof(double));
 		return accepted;
 	}
 }
