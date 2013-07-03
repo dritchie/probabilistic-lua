@@ -6,11 +6,22 @@ This file implements the HMC sampling library and is compiled into a shared libr
 #include "stan/model/prob_grad_ad.hpp"
 #include "stan/mcmc/nuts.hpp"
 
+#ifdef _WIN32
 #define EXPORT __declspec(dllexport)
+#else
+#define EXPORT __attribute__ ((visibility ("default")))
+#endif
+
+
+// C 'wrapper' around stan's dual number class
+extern "C"
+{
+	#include "num.h"
+	typedef num(*LogProbFunction)(num*);
+}
 
 // A custom subclass of prob_grad_ad that evaluates log probabilities via
 // a function pointer.
-typedef stan::agrad::var(*LogProbFunction)(stan::agrad::var*);
 class FunctionPoinderModel : public stan::model::prob_grad_ad
 {
 private:
@@ -19,10 +30,11 @@ public:
 	FunctionPoinderModel() : stan::model::prob_grad_ad(0), lpfn(NULL) {}
 	void setLogprobFunction(LogProbFunction lp) { lpfn = lp; }
 	stan::agrad::var log_prob(std::vector<stan::agrad::var>& params_r, 
-                              std::vector<int>& params_i,
-                              std::ostream* output_stream = 0)
+			                  std::vector<int>& params_i,
+			                  std::ostream* output_stream = 0)
 	{
-		return lpfn(&params_r[0]);
+		num lp = lpfn((num*)(&params_r[0]));
+		return (stan::agrad::var)lp;
 	}
 };
 
@@ -38,6 +50,11 @@ public:
 // The C interface
 extern "C"
 {
+	EXPORT double getValue(num n)
+	{
+		return ((stan::agrad::var)n).val();
+	}
+
 	EXPORT SamplerState* newSampler()
 	{
 		return new SamplerState;
@@ -89,3 +106,7 @@ extern "C"
 		return accepted;
 	}
 }
+
+
+
+

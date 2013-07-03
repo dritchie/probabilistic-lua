@@ -1,5 +1,6 @@
 local util = require("probabilistic.util")
 local cmath = terralib.require("probabilistic.cmath")
+local cc = terralib.require("probabilistic.cCompiler")
 local prof = require("probabilistic.profiling")
 
 
@@ -15,8 +16,10 @@ end
 -- Compilation options --
 -------------------------
 -- Can be "C" or "Terra"
+-- [Must be "C" for HMC]
 local targetLang = "C"
 -- Can be "External" or "ThroughTerra" (only applies when targetLang = "C")
+-- [Must be "External" for HMC]
 local cCompiler = "External"
 
 
@@ -899,33 +902,6 @@ local function compileCLogProbFunctionThroughTerra(fnir)
 	return C[fnir.name]
 end
 
-local function compileCLogProbFunctionExternally(fnir)
-	local cppname = string.format("__%s.cpp", fnir.name)
-	local soname = string.gsub(cppname, ".cpp", ".so")
-	local code = string.format([[
-		#include <math.h>
-		extern "C" {
-		%s
-		__declspec(dllexport) %s
-		}
-	]], fnir:cReturnTypeDefinition(), fnir:emitCCode())
-	local srcfile = io.open(cppname, "w")
-	srcfile:write(code)
-	srcfile:close()
-	util.wait(string.format("clang -shared -O3 %s -o %s 2>&1", cppname, soname))
-	local cdecs = string.format([[
-		%s
-		%s;
-	]], fnir:cReturnTypeDefinition(), fnir:cPrototype())
-	local C = terralib.includecstring(cdecs)
-	terralib.linklibrary(soname)
-	local fn = C[fnir.name]
-	fn:compile()
-	util.wait(string.format("rm -f %s 2>&1", cppname))
-	util.wait(string.format("rm -f %s 2>&1", soname))
-	return fn
-end
-
 local function compileLogProbFunction(fnir, targetLang)
 	if targetLang == "Terra" then
 		local fn = fnir:emitTerraCode()
@@ -935,11 +911,13 @@ local function compileLogProbFunction(fnir, targetLang)
 		if cCompiler == "ThroughTerra" then
 			fn = compileCLogProbFunctionThroughTerra(fnir)
 		elseif cCompiler == "External" then
-			fn = compileCLogProbFunctionExternally(fnir)
+			fn = cc.compile(fnir, realnumtype)
 		else
 			error("Unsupported C Compiler")
 		end
 		local numretvals = fnir:numReturnValues()
+		-- If the number of return values is greater than 1, this function
+		-- extracts each value from the returned struct and returns them as a list
 		if numretvals > 1 then
 			local rstructType = fn.definitions[1]:gettype().returns[1]
 			local args = util.map(function(arg) return arg.value end, fnir.args)

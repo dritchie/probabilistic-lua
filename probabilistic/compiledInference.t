@@ -4,6 +4,8 @@ local cmath = terralib.require("probabilistic.cmath")
 local trace = require("probabilistic.trace")
 local inf = require("probabilistic.inference")
 local prof = require("probabilistic.profiling")
+local hmc = terralib.require("probabilistic.hmc")
+local ffi = require("ffi")
 
 
 -- Internal sampler state for compiled trace
@@ -87,9 +89,14 @@ function SingleCompiledTraceState:finalizeLogprobFn(lpfn, paramVars)
 	local arglist = util.map(function(v) return v.value end, paramVars)
 	local realnum = mt.realNumberType()
 	local struct LPData { logprob: realnum }
+
+	-- Need to cast to this type to get around the fact that hmc.num and the
+	-- 'num' type defined by the lpfn library are technically two separate types.
+	local valstype = lpfn.definitions[1]:gettype().parameters[1]
+
 	local terra lpWrapper(vals: &realnum, [arglist])
 		var lpd: LPData
-		lpd.logprob = lpfn(vals, [arglist])
+		lpd.logprob = lpfn([valstype](vals), [arglist])
 		return lpd
 	end
 	return lpWrapper, paramVars
@@ -144,9 +151,14 @@ function LARJInterpolationCompiledTraceState:finalizeLogprobFn(lpfn, paramVars)
 	table.insert(paramVars, lpAlpha)
 	local arglistWithAlpha = util.map(function(v) return v.value end, paramVars)
 	local struct LPData { logprob: realnum, logprob1: realnum, logprob2: realnum }
+
+	-- Need to cast to this type to get around the fact that hmc.num and the
+	-- 'num' type defined by the lpfn library are technically two separate types.
+	local valstype = lpfn.definitions[1]:gettype().parameters[1]
+
 	local terra lpWrapper(vals: &realnum, [arglistWithAlpha])
 		var lpd : LPData
-		lpd.logprob1, lpd.logprob2 = lpfn(vals, [arglist])
+		lpd.logprob1, lpd.logprob2 = lpfn([valstype](vals), [arglist])
 		lpd.logprob = (1.0 - [lpAlpha.value])*lpd.logprob1 + [lpAlpha.value]*lpd.logprob2
 		return lpd
 	end
@@ -275,7 +287,6 @@ function CompiledKernel:next(currState, hyperparams)
 	-- Call the step function to advance the state
 	local accepted = self.currStepFn(newState, hyperparams)
 	self.proposalsMade = self.proposalsMade + 1
-	accepted = util.int2bool(accepted)
 	if accepted then
 		newState:setLogprob(self.currLpData)
 		self.proposalsAccepted = self.proposalsAccepted + 1
@@ -441,6 +452,59 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, lpfn, bandwidths)
 end
 
 
+-- An MCMC kernel that performs Hamiltonian Monte Carlo
+-- using the No-U-Turn sampler implementation provided by the
+-- stan MCMC library (on compiled traces)
+local CompiledHMCKernel = {}
+setmetatable(CompiledHMCKernel, {__index = CompiledKernel})
+
+-- No default parameters needed
+
+function CompiledHMCKernel:new(cacheSize)
+	local newobj = CompiledKernel.new(self, cacheSize)
+
+	newobj.sampler = hmc.newSampler()
+	ffi.gc(newobj.sampler, function(self) hmc.deleteSampler(self) end)
+
+	return newobj
+end
+
+function CompiledHMCKernel:assumeControL(currTrace)
+	local currState = CompiledKernel.assumeControl(self, currTrace)
+	local numvals = table.getn(currState.varVals)
+	hmc.setVariableValues(self.sampler, numvals, currState.varVals)
+end
+
+function CompiledHMCKernel:doCompile(currState)
+	local currTrace = currState.trace
+
+	-- Compile the log prob function
+	local lpfn
+	local paramVars
+	lpfn, paramVars = self:compileLogProbFunction(currState, hmc.num)
+
+	-- Generate a specialized step function
+	prof.startTimer("StepFunctionCompile")
+	self.currStepFn = self:wrapStepFunction(self:genStepFunction(numVars, lpfn), paramVars)
+	prof.stopTimer("StepFunctionCompile")
+end
+
+function CompiledHMCKernel:genStepFunction(numVars, lpfn)
+	-- The compiled Terra function
+	local step = 
+		terra(vals: &double, currLP: double)
+			var accepted = hmc.nextSample([self.sampler], numVars, vals)
+			return accepted
+		end
+
+	-- Compile it right now (for more accurate profiling info)
+	step:compile()
+
+	return step
+end
+
+
+
 -- Sample from a fixed-structure probabilistic computation for some
 -- number of iterations using compiled Gaussian drift MH
 local function driftMH_JIT(computation, params)
@@ -461,9 +525,31 @@ local function LARJDriftMH_JIT(computation, params)
 					params)
 end
 
+-- Sample from a fixed-structure probabilistic computation
+-- using HMC
+local function HMC_JIT(computation, params)
+	params = inf.KernelParams:new(params)
+	return inf.mcmc(computation,
+					CompiledHMCKernel:new(params.cacheSize),
+					params)
+end
+
+-- Sample from a probabilistic computation using LARJMCMC, with an
+-- inner kernel that runs compiled HMC.
+local function LARJHMC_JIT(computation, params)
+	params = inf.KernelParams:new(params)
+	return inf.mcmc(computation,
+					inf.LARJKernel:new(
+						CompiledHMCKernel:new(params.cacheSize),
+						params.annealSteps, params.jumpFreq),
+					params)
+end
+
 -- Module exports
 return
 {
 	driftMH_JIT = driftMH_JIT,
-	LARJDriftMH_JIT = LARJDriftMH_JIT
+	LARJDriftMH_JIT = LARJDriftMH_JIT,
+	HMC_JIT = HMC_JIT,
+	LARJHMC_JIT = LARJHMC_JIT
 }

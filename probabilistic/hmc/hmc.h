@@ -4,11 +4,7 @@ the HMC sampling library
 */
 
 // The dual number type
-struct vari;
-typedef struct
-{
-	struct vari* impl_;
-} num;
+#include "num.h"
 
 /* The sampler interface */
 
