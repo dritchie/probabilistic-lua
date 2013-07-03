@@ -84,6 +84,7 @@ function trace.RandomExecutionTrace:traceLogprobExp()
 	return self.logprob
 end
 
+--local C = terralib.includec("stdio.h")
 -- The state may need to do some extra work to the compiled logprob function
 function SingleCompiledTraceState:finalizeLogprobFn(lpfn, paramVars)
 	local arglist = util.map(function(v) return v.value end, paramVars)
@@ -97,6 +98,8 @@ function SingleCompiledTraceState:finalizeLogprobFn(lpfn, paramVars)
 	local terra lpWrapper(vals: &realnum, [arglist])
 		var lpd: LPData
 		lpd.logprob = lpfn([valstype](vals), [arglist])
+		--lpd.logprob = 0.0/0.0
+		--C.printf("%g %llx\n", lpd.logprob, @[&int64](&lpd.logprob))
 		return lpd
 	end
 	return lpWrapper, paramVars
@@ -327,6 +330,11 @@ function CompiledKernel:compileLogProbFunction(currState, realNumType)
 	-- and a structured return type
 	local fnwrapper = function(vals)
 		self.currLpData = fn(vals, unpack(self.currHyperParams))
+		-- print("-------------")
+		-- print(self.currLpData)
+		-- print(fn.definitions[1]:gettype().returns[1].entries[1].field)
+		-- print(fn.definitions[1]:gettype().returns[1].entries[1].type)
+		-- print(self.currLpData.logprob)
 		return self.currLpData.logprob
 	end
 	local castedfn = terralib.cast({&double} -> {double}, fnwrapper)
@@ -431,12 +439,12 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, lpfn, bandwidths)
 			var i = [int](random() * [numVars])
 			var v = vals[i]
 
-			-- Perturb
-			var newv = gaussian_sample(v, [bandwidths][i])
+			var bw : double = (@bandwidths)[i]
+			var newv = gaussian_sample(v, bw)
 			vals[i] = newv
 
 			-- Accept/reject
-			var newLP = [lpfn](vals)
+			var newLP = lpfn(vals)
 			if cmath.log(random()) < newLP - currLP then
 				return true
 			else

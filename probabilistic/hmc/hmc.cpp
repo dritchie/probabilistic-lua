@@ -34,7 +34,8 @@ public:
 			                  std::ostream* output_stream = 0)
 	{
 		num lp = lpfn((num*)(&params_r[0]));
-		return (stan::agrad::var)lp;
+		//return stan::agrad::var((stan::agrad::vari*)lp.impl);
+		return *((stan::agrad::var*)&lp);
 	}
 };
 
@@ -52,7 +53,8 @@ extern "C"
 {
 	EXPORT double getValue(num n)
 	{
-		return ((stan::agrad::var)n).val();
+		//return stan::agrad::var((stan::agrad::vari*)n.impl).val();
+		return ((stan::agrad::var*)&n)->val();
 	}
 
 	EXPORT SamplerState* newSampler()

@@ -42,7 +42,7 @@ local function compile(fnir, realnumtype)
 		error("Unsupported real number type -- must be 'double' or 'hmc.num'")
 	end
 
-	preprocessIR(nfir, ishmc)
+	preprocessIR(fnir, ishmc)
 
 	local cppname = string.format("__%s.cpp", fnir.name)
 	local soname = string.gsub(cppname, ".cpp", ".so")
