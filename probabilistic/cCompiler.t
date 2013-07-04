@@ -1,5 +1,6 @@
 local util = require("probabilistic.util")
 local hmc = terralib.require("probabilistic.hmc")
+local IR = terralib.require("probabilistic.IR")
 
 
 local function interfacePreamble(ishmc)
@@ -28,8 +29,42 @@ end
 
 local function preprocessIR(fnir, ishmc)
 	if ishmc then
-		-- We need to convert the argument type/return type
-		-- from/to stan::agrad::var
+		-- Introduce a variable which casts the argument vals pointer
+		-- from num* to stan::agrad::var*.
+		-- Make all the references to the original argument refer to this new
+		-- varaible instead
+		local vals = table.remove(fnir.args, 1)
+		local origValSymbol = vals.value
+		local newValSymbol = {displayname = "stanVals", type = "stan::agrad::var*"}
+		vals.value = newValSymbol
+		local stanVals = vals
+		stanVals.isIntermediate = true
+		vals = IR.VarNode:new(origValSymbol)
+		table.insert(fnir.args, 1, vals)
+		local castExpr = IR.CastNode:new("stan::agrad::var*", vals)
+		table.insert(fnir.body.statements, 1, IR.VarAssignmentStatement:new({stanVals}, {castExpr}))
+		-- Cast all return values back to num.
+		if not fnir.hasMultipleReturns then
+			local returnStatement = table.remove(fnir.body.statements)
+			local returnExp = returnStatement.exps[1]
+			local tempVar = IR.VarNode:new({displayname = "numCastTmp", type = "stan::agrad::var"}, true)
+			table.insert(fnir.body.statements, IR.VarAssignmentStatement:new({tempVar}, {returnExp}))
+			local castedRetExp = IR.ArbitraryCExpression:new(
+				function() return string.format("*((num*)&(%s))", tempVar:emitCCode()) end)
+			table.insert(fnir.body.statements, IR.ReturnStatement:new({castedRetExp}))
+		else
+			local fieldAssign = table.remove(fnir.body.statements, #fnir.body.statements - 1)
+			local tempVars = {}
+			local castExprs = {}
+			for i=1,fnir.numMultipleReturns do
+				local tv = IR.VarNode:new({displayname = string.format("numCastTmp_%d", i), type = "stan::agrad::var"})
+				table.insert(tempVars, tv)
+				table.insert(castExprs, IR.ArbitraryCExpression:new(function()
+					return string.format("*((num*)&(%s))", tv:emitCCode()) end))
+			end
+			table.insert(fnir.body.statements, #fnir.body.statements-1, IR.VarAssignmentStatement:new(tempVars, fieldAssign.rhslist))
+			table.insert(fnir.body.statements, #fnir.body.statements-1, IR.AssignmentStatement(fieldAssign.lhslist, castExprs))
+		end
 	end
 end
 
@@ -58,6 +93,7 @@ extern "C" {
 EXPORT %s
 }
 	]], implementationPreamble(ishmc), fnir:cReturnTypeDefinition(), fnir:emitCCode())
+	--print(code)
 	local srcfile = io.open(cppname, "w")
 	srcfile:write(code)
 	srcfile:close()

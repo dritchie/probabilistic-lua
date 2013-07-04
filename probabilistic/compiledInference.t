@@ -71,6 +71,9 @@ end
 
 function SingleCompiledTraceState:setLogprob(lpdata)
 	self.logprob = lpdata.logprob
+	if type(self.logprob) ~= "number" then
+		self.logprob = hmc.getValue(self.logprob)
+	end
 end
 
 -- Make the trace know how to convert itself into a compiled state
@@ -125,6 +128,10 @@ end
 function LARJInterpolationCompiledTraceState:setLogprob(lpdata)
 	self.logprob1 = lpdata.logprob1
 	self.logprob2 = lpdata.logprob2
+	if type(self.logprob1) ~= "number" then
+		self.logprob1 = hmc.getValue(self.logprob1)
+		self.logprob2 = hmc.getValue(self.logprob2)
+	end
 end
 
 -- Make the trace know how to convert itself into a compiled state
@@ -475,15 +482,15 @@ function CompiledHMCKernel:doCompile(currState)
 
 	-- Generate a specialized step function
 	prof.startTimer("StepFunctionCompile")
-	self.currStepFn = self:wrapStepFunction(self:genStepFunction(numVars, lpfn), paramVars)
+	self.currStepFn = self:wrapStepFunction(self:genStepFunction(lpfn), paramVars)
 	prof.stopTimer("StepFunctionCompile")
 end
 
-function CompiledHMCKernel:genStepFunction(numVars, lpfn)
+function CompiledHMCKernel:genStepFunction(lpfn)
 	-- The compiled Terra function
 	local step = 
 		terra(vals: &double, currLP: double)
-			var accepted = hmc.nextSample([self.sampler], numVars, vals)
+			var accepted = hmc.nextSample([self.sampler], vals)
 			return accepted
 		end
 

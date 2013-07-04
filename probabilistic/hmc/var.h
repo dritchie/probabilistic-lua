@@ -1,1 +1,1 @@
-#include "stan/agrad/rev/var.hpp"
+#include "stan/agrad/agrad.hpp"
