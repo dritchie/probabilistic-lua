@@ -12,6 +12,12 @@ This file implements the HMC sampling library and is compiled into a shared libr
 #define EXPORT __attribute__ ((visibility ("default")))
 #endif
 
+void hmcError(std::string message)
+{
+	printf("libhmc: %s\n", message.c_str());
+	throw 0;
+}
+
 
 // C 'wrapper' around stan's dual number class
 extern "C"
@@ -24,9 +30,8 @@ extern "C"
 // a function pointer.
 class FunctionPoinderModel : public stan::model::prob_grad_ad
 {
-private:
-	LogProbFunction lpfn;
 public:
+	LogProbFunction lpfn;
 	FunctionPoinderModel() : stan::model::prob_grad_ad(0), lpfn(NULL) {}
 	void setLogprobFunction(LogProbFunction lp) { lpfn = lp; }
 	stan::agrad::var log_prob(std::vector<stan::agrad::var>& params_r, 
@@ -74,6 +79,11 @@ extern "C"
 
 	EXPORT void setVariableValues(SamplerState* s, int numvals, double* vals)
 	{
+		if (s->model.lpfn == NULL)
+		{
+			hmcError("Cannot set variable values before log prob function has been set.");
+		}
+
 		std::vector<double> params_r(numvals);
 		memcpy(&params_r[0], vals, numvals*sizeof(double));
 

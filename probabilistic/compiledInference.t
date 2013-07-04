@@ -238,7 +238,7 @@ function CompiledKernel:new(cacheSize)
 		compileCache = CompiledTraceCache:new(cacheSize),
 
 		-- Stuff for abstracting the log prob function
-		currHyperParams = {},
+		currHyperParams = nil,
 		currLpData = nil,
 
 		-- Analytics
@@ -322,25 +322,39 @@ function CompiledKernel:compileLogProbFunction(currState, realNumType)
 
 	-- Wrap the logprob function to abstract away the use of hyperparameters
 	-- and a structured return type
-	local fnwrapper = function(vals)
-		self.currLpData = fn(vals, unpack(self.currHyperParams))
-		return self.currLpData.logprob
+	local LPData = fn.definitions[1]:gettype().returns[1]
+	local terra derefLPData(lpdptr: &LPData)
+		return @lpdptr
 	end
-	local castedfn = terralib.cast({&double} -> {double}, fnwrapper)
+	local function setCurrLpData(lpdtr)
+		self.currLpData = derefLPData(lpdtr)
+	end
+	local function getCurrHyperParams()
+		return unpack(self.currHyperParams)
+	end
+	local gchpReturnType = {}
+	for i=1,#paramVars do table.insert(gchpReturnType, double) end
+	getCurrHyperParams = terralib.cast({} -> gchpReturnType, getCurrHyperParams)
+	local fnwrapper = terra(vals: &realNumType)
+		var lpd = fn(vals, getCurrHyperParams())
+		setCurrLpData(&lpd)
+		return lpd.logprob
+	end
 	prof.stopTimer("LogProbCompile")
 
-	return castedfn, paramVars
+	return fnwrapper, paramVars
 end
 
 function CompiledKernel:wrapStepFunction(stepfn, paramVars)
 	-- A Lua wrapper around the Terra function that calls it with the appropriate
 	-- additional hyperparameters
 	return function(state, hyperparams)
-		local additionalArgs = {}
+		self.currHyperParams = {}
 		if hyperparams then
-			additionalArgs = util.map(function(pvar) return hyperparams[pvar:name()]:getValue() end, paramVars)
+			for i,pvar in ipairs(paramVars) do
+				table.insert(self.currHyperParams, hyperparams[pvar:name()]:getValue())
+			end
 		end
-		self.currHyperParams = additionalArgs
 		return stepfn(state.varVals, state.logprob)
 	end
 end
@@ -459,17 +473,15 @@ setmetatable(CompiledHMCKernel, {__index = CompiledKernel})
 
 function CompiledHMCKernel:new(cacheSize)
 	local newobj = CompiledKernel.new(self, cacheSize)
-
 	newobj.sampler = hmc.newSampler()
 	ffi.gc(newobj.sampler, function(self) hmc.deleteSampler(self) end)
 
 	return newobj
 end
 
-function CompiledHMCKernel:assumeControL(currTrace)
+function CompiledHMCKernel:assumeControl(currTrace)
 	local currState = CompiledKernel.assumeControl(self, currTrace)
-	local numvals = table.getn(currState.varVals)
-	hmc.setVariableValues(self.sampler, numvals, currState.varVals)
+	hmc.setVariableValues(self.sampler, currState.numVars, currState.varVals)
 end
 
 function CompiledHMCKernel:doCompile(currState)
@@ -479,14 +491,15 @@ function CompiledHMCKernel:doCompile(currState)
 	local lpfn
 	local paramVars
 	lpfn, paramVars = self:compileLogProbFunction(currState, hmc.num)
+	hmc.setLogprobFunction(self.sampler, lpfn.definitions[1]:getpointer())
 
 	-- Generate a specialized step function
 	prof.startTimer("StepFunctionCompile")
-	self.currStepFn = self:wrapStepFunction(self:genStepFunction(lpfn), paramVars)
+	self.currStepFn = self:wrapStepFunction(self:genStepFunction(), paramVars)
 	prof.stopTimer("StepFunctionCompile")
 end
 
-function CompiledHMCKernel:genStepFunction(lpfn)
+function CompiledHMCKernel:genStepFunction()
 	-- The compiled Terra function
 	local step = 
 		terra(vals: &double, currLP: double)

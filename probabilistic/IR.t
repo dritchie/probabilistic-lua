@@ -277,7 +277,7 @@ end
 
 IR.CastNode = IR.Node:new()
 
-function IR.CastNode:new(exp, newtype)
+function IR.CastNode:new(newtype, exp)
 	local newobj = IR.Node.new(self, newtype)
 	table.insert(newobj.inputs, exp)
 	return newobj
@@ -297,6 +297,27 @@ function IR.CastNode:emitTerraCode()
 end
 
 
+-- For when I have something I want to kludge into the IR without having to write
+-- a whole bunch more expression types for it.
+IR.ArbitraryCExpression = IR.Node:new()
+
+function IR.ArbitraryCExpression:new(codeGenFn)
+	local newobj = IR.Node.new(self, codeGenFn)
+	return newobj
+end
+
+function IR.ArbitraryCExpression:__tostring(tablevel)
+	tablevel = tablevel or 0
+	return util.tabify("IR.ArbitraryCExpression", tablevel)
+end
+
+function IR.ArbitraryCExpression:emitCCode()
+	return self.value()
+end
+
+function IR.ArbitraryCExpression:emitTerraCode()
+	error("Cannot generate Terra code for an arbitrary C expression")
+end
 
 --- End expressions / begin statements ---
 

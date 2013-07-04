@@ -102,14 +102,43 @@
 -------------------------
 
 
-C1 = terralib.includecstring[[
-typedef struct { void* p; } Derp;
-int* getP(Derp d) { return (int*)(d.p); }
-]]
+-- struct Derp { val: int }
 
-C2 = terralib.includecstring[[
-typedef struct { void* p; } Derp;
-int* getP(Derp d) { return (int*)(d.p); }
-]]
+-- d = nil
+
+-- terra derefDerp(dptr: &Derp)
+-- 	return @dptr
+-- end
+
+-- function setD(newd)
+-- 	d = derefDerp(newd)
+-- end
+
+-- terra tsetD(newd: Derp)
+-- 	setD(&newd)
+-- end
+
+-- terra tsetDNoArg()
+-- 	var newd = Derp { 42 };
+-- 	tsetD(newd)
+-- end
+
+-- newd = terralib.new(Derp, 42)
+-- tsetD(newd)
+-- print(d.val)
+
+---------------------------
+
+terra foo(val: int)
+	return val + 1
+end
+
+terra bar(fn: {int} -> {int}, val: int)
+	return fn(val)
+end
+
+print(bar(foo.definitions[1]:getpointer(), 1))
+
+
 
 
