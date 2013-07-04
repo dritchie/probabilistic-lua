@@ -84,22 +84,14 @@ function trace.RandomExecutionTrace:traceLogprobExp()
 	return self.logprob
 end
 
---local C = terralib.includec("stdio.h")
 -- The state may need to do some extra work to the compiled logprob function
 function SingleCompiledTraceState:finalizeLogprobFn(lpfn, paramVars)
 	local arglist = util.map(function(v) return v.value end, paramVars)
 	local realnum = mt.realNumberType()
 	local struct LPData { logprob: realnum }
-
-	-- Need to cast to this type to get around the fact that hmc.num and the
-	-- 'num' type defined by the lpfn library are technically two separate types.
-	local valstype = lpfn.definitions[1]:gettype().parameters[1]
-
 	local terra lpWrapper(vals: &realnum, [arglist])
 		var lpd: LPData
-		lpd.logprob = lpfn([valstype](vals), [arglist])
-		--lpd.logprob = 0.0/0.0
-		--C.printf("%g %llx\n", lpd.logprob, @[&int64](&lpd.logprob))
+		lpd.logprob = lpfn(vals, [arglist])
 		return lpd
 	end
 	return lpWrapper, paramVars
@@ -154,14 +146,9 @@ function LARJInterpolationCompiledTraceState:finalizeLogprobFn(lpfn, paramVars)
 	table.insert(paramVars, lpAlpha)
 	local arglistWithAlpha = util.map(function(v) return v.value end, paramVars)
 	local struct LPData { logprob: realnum, logprob1: realnum, logprob2: realnum }
-
-	-- Need to cast to this type to get around the fact that hmc.num and the
-	-- 'num' type defined by the lpfn library are technically two separate types.
-	local valstype = lpfn.definitions[1]:gettype().parameters[1]
-
 	local terra lpWrapper(vals: &realnum, [arglistWithAlpha])
 		var lpd : LPData
-		lpd.logprob1, lpd.logprob2 = lpfn([valstype](vals), [arglist])
+		lpd.logprob1, lpd.logprob2 = lpfn(vals, [arglist])
 		lpd.logprob = (1.0 - [lpAlpha.value])*lpd.logprob1 + [lpAlpha.value]*lpd.logprob2
 		return lpd
 	end
@@ -330,11 +317,6 @@ function CompiledKernel:compileLogProbFunction(currState, realNumType)
 	-- and a structured return type
 	local fnwrapper = function(vals)
 		self.currLpData = fn(vals, unpack(self.currHyperParams))
-		-- print("-------------")
-		-- print(self.currLpData)
-		-- print(fn.definitions[1]:gettype().returns[1].entries[1].field)
-		-- print(fn.definitions[1]:gettype().returns[1].entries[1].type)
-		-- print(self.currLpData.logprob)
 		return self.currLpData.logprob
 	end
 	local castedfn = terralib.cast({&double} -> {double}, fnwrapper)
@@ -439,7 +421,7 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, lpfn, bandwidths)
 			var i = [int](random() * [numVars])
 			var v = vals[i]
 
-			var bw : double = (@bandwidths)[i]
+			var bw : double = bandwidths[i]
 			var newv = gaussian_sample(v, bw)
 			vals[i] = newv
 

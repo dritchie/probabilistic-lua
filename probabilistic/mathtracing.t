@@ -335,15 +335,14 @@ local function compileLogProbFunction(fnir, targetLang)
 		else
 			error("Unsupported C Compiler")
 		end
-		local numretvals = fnir:numReturnValues()
 		-- If the number of return values is greater than 1, this function
 		-- extracts each value from the returned struct and returns them as a list
-		if numretvals > 1 then
+		if fnir.hasMultipleReturns then
 			local rstructType = fn.definitions[1]:gettype().returns[1]
 			local args = util.map(function(arg) return arg.value end, fnir.args)
 			local function fields(structvar)
 				local retvals = {}
-				for i=1,numretvals do table.insert(retvals, `structvar.[rstructType.entries[i].field]) end
+				for i=1,fnir.numMultipleReturns do table.insert(retvals, `structvar.[rstructType.entries[i].field]) end
 				return retvals
 			end
 			fn = terra([args])

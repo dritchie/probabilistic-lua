@@ -171,8 +171,8 @@ local t21 = os.clock()
 
 ---- GAUSSIAN DRIFT ----
 --res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
-res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
---res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
+res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
 
 ---- HMC ----
 --res = MAP(makeFixedDimensionProgram(dots,fweight), HMC_JIT, {numsamps=numsamps, verbose=true})

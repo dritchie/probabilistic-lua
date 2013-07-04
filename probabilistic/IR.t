@@ -492,6 +492,59 @@ function IR.VarAssignmentStatement:emitTerraCode()
 end
 
 
+-- A statement assigning the result of one set of expressions to another
+IR.AssignmentStatement = {}
+
+function IR.AssignmentStatement:new(lhslist, rhslist)
+	local newobj = 
+	{
+		lhslist = lhslist,
+		rhslist = rhslist
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function IR.AssignmentStatement:childNodes()
+	return util.joinarrays(self.lhslist, self.rhslist)
+end
+
+function IR.AssignmentStatement:__tostring(tablevel)
+	tablevel = 0 or tablevel
+	local str = string.format("IR.AssignmentStatement:\n%s", util.tabify("LHS:", tablevel+1))
+	for i,v in ipairs(self.lhslist) do
+		str = string.format("%s\n%s", str, v:__tostring(tablevel+2))
+	end
+	str = string.format("%s\n%s", str, util.tabify("RHS:", tablevel+1))
+	for i,e in ipairs(self.rhslist) do
+		str = string.format("%s\n%s", str, e:__tostring(tablevel+2))
+	end
+	return str
+end
+
+function IR.AssignmentStatement:emitCCode()
+	-- This check will fail for function calls with multiple return values, which
+	-- C can't handle.
+	assert(table.getn(self.lhslist) == table.getn(self.rhslist))
+	-- We'll do one line for each, since C can't handle everything in one statment
+	local str = ""
+	for i,l in ipairs(self.lhslist) do
+		local r = self.rhslist[i]
+		str = string.format("%s%s = %s;\n", str, l:emitCCode(), r:emitCCode())
+	end
+	return str
+end
+
+function IR.AssignmentStatement:emitTerraCode()
+	local lhs = util.map(function(l) return l:emitTerraCode() end, self.lhslist)
+	local rhs = util.map(function(r) return r:emitTerraCode() end, self.rhslist)
+	return quote
+		[lhs] = [rhs]
+	end
+end
+
+
 -- Blocks are a list of statements
 IR.Block = {}
 
@@ -578,14 +631,14 @@ function IR.FunctionDefinition:fixMultipleReturns()
 		-- Remove the last (return) statement
 		local origReturn = table.remove(self.body.statements)
 		-- Declare a struct to hold the return values
-		local newStructVar = IR.VarNode:new(symbol("retvals", self:cReturnType()), true)
+		local newStructVar = IR.VarNode:new({displayname = "retvals", type = self:cReturnType()}, true)
 		table.insert(self.body.statements, IR.VarAssignmentStatement:new({newStructVar}, {}))
 		-- Assign to each of the fields of this struct
 		local fieldnodes = {}
 		for i=1,numretvals do
 			table.insert(fieldnodes, IR.AggregateFieldAccessNode:new(string.format("val%d", i), newStructVar))
 		end
-		table.insert(self.body.statements, IR.VarAssignmentStatement:new(fieldnodes, origReturn.exps))
+		table.insert(self.body.statements, IR.AssignmentStatement:new(fieldnodes, origReturn.exps))
 		-- Return the struct
 		table.insert(self.body.statements, IR.ReturnStatement:new({newStructVar}))
 	end
