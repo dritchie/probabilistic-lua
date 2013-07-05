@@ -87,6 +87,8 @@ extern "C"
 		std::vector<double> params_r(numvals);
 		memcpy(&params_r[0], vals, numvals*sizeof(double));
 
+		s->model.set_num_params_r(numvals);
+
 		// Initialize the sampler if this is the first time.
 		if (s->sampler == NULL)
 		{
@@ -95,7 +97,6 @@ extern "C"
 		}
 		else
 		{
-			s->model.set_num_params_r(numvals);
 			s->sampler->set_params_r(params_r);
 		}
 	}
