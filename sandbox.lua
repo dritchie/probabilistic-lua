@@ -152,7 +152,8 @@ end
 
 -------
 
-local numsamps = 100000
+--local numsamps = 100000
+local numsamps = 1000
 local numAnnealSteps = 10
 local dots = 6
 local dims = {4, 5, 6, 7, 8}
@@ -192,4 +193,4 @@ local function saveDotCSV(points, filename)
 	f:close()
 end
 
---saveDotCSV(res, "Tableau/dotvis/dots.csv")
+saveDotCSV(res, "Tableau/dotvis/dots.csv")

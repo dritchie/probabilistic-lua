@@ -129,15 +129,37 @@
 
 ---------------------------
 
-terra foo(val: int)
-	return val + 1
+-- terra foo(val: int)
+-- 	return val + 1
+-- end
+
+-- terra bar(fn: {int} -> {int}, val: int)
+-- 	return fn(val)
+-- end
+
+-- print(bar(foo.definitions[1]:getpointer(), 1))
+
+-----------------------------
+
+-- terra retBool()
+-- 	var i : int = 1
+-- 	var b : bool = [bool](i)
+-- 	return b
+-- end
+
+-- print(retBool())
+
+-------------------------------
+
+C = terralib.includec("stdio.h")
+
+terra retpi()
+	var p = [math.pi]
+	C.printf("%g\n", p)
+	return p
 end
 
-terra bar(fn: {int} -> {int}, val: int)
-	return fn(val)
-end
-
-print(bar(foo.definitions[1]:getpointer(), 1))
+print(retpi())
 
 
 

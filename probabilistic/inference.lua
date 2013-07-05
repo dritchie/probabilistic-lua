@@ -599,6 +599,9 @@ local function mcmc(computation, kernel, kernelparams)
 	local iters = kernelparams.numsamps * kernelparams.lag
 	local currentState = kernel:assumeControl(currentTrace)
 	for i=1,iters do
+		if kernelparams.verbose then
+			io.write(string.format("iteration %d\r", i))
+		end
 		currentState = kernel:next(currentState)
 		if i % kernelparams.lag == 0 then
 			table.insert(samps, currentState)
@@ -606,6 +609,7 @@ local function mcmc(computation, kernel, kernelparams)
 	end
 	currentTrace = kernel:releaseControl(currentState)
 	if kernelparams.verbose then
+		print("")
 		kernel:stats()
 	end
 	return samps

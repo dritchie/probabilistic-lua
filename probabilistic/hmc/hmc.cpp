@@ -34,11 +34,12 @@ public:
 	LogProbFunction lpfn;
 	FunctionPoinderModel() : stan::model::prob_grad_ad(0), lpfn(NULL) {}
 	void setLogprobFunction(LogProbFunction lp) { lpfn = lp; }
-	stan::agrad::var log_prob(std::vector<stan::agrad::var>& params_r, 
+	virtual stan::agrad::var log_prob(std::vector<stan::agrad::var>& params_r, 
 			                  std::vector<int>& params_i,
 			                  std::ostream* output_stream = 0)
 	{
-		num lp = lpfn((num*)(&params_r[0]));
+		num* params = (num*)(&params_r[0]);
+		num lp = lpfn(params);
 		//return stan::agrad::var((stan::agrad::vari*)lp.impl);
 		return *((stan::agrad::var*)&lp);
 	}
@@ -104,14 +105,15 @@ extern "C"
 	EXPORT int nextSample(SamplerState* s, double* vals)
 	{
 		size_t numparams = s->model.num_params_r();
+
 		stan::mcmc::sample samp = s->sampler->next();
 		const std::vector<double>& newvals = samp.params_r();
-		bool accepted = true;
+		bool accepted = false;
 		for (unsigned int i = 0; i < numparams; i++)
 		{
 			if (newvals[i] != vals[i])
 			{
-				accepted = false;
+				accepted = true;
 				break;
 			}
 		}
