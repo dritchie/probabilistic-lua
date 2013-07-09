@@ -1,4 +1,48 @@
 local util = terralib.require("probabilistic.util")
+local ffi = require("ffi")
+
+local unaryOps = 
+{
+	{"negate", "-"}
+}	
+local unaryFns = 
+{
+	{"abs"},
+	{"acos"},
+	{"asin"},
+	{"atan"},
+	{"ceil"},
+	{"cos"},
+	{"cosh"},
+	{"exp"},
+	{"floor"},
+	{"log"},
+	{"log10"},
+	{"sin"},
+	{"sinh"},
+	{"sqrt"},
+	{"tan"},
+	{"tanh"}
+}
+local binaryOps =
+{	
+	{"add", "+"}, 
+	{"sub", "-"},
+	{"mul", "*"},
+	{"div", "/"},
+	{"eq", "=="},
+	{"lt", "<"},
+	{"le", "<="}
+}
+local binaryFns = 
+{
+	{"atan2"},
+	{"fmin"},
+	{"fmax"},
+	{"fmod"},
+	{"pow"}
+}
+
 
 local stanroot = os.getenv("STAN_ROOT")
 if not stanroot then
@@ -20,6 +64,72 @@ local f = io.open(soname, "r")
 if f then
 	f:close()
 else
+
+	-- Generate C++ prototypes and implementations for all the arithmetic functions we need
+	-- Write them to files that are included by hmc.h and hmc.cpp
+
+	local function genUnaryCppProto(name)
+		return string.format("num %s_AD(num x)", name)
+	end
+
+	local function genUnaryCppImpl(name, op)
+		op = op or name
+		return string.format([[
+			EXPORT %s
+			{
+				stan::agrad::var xx = *(stan::agrad::var*)(&x);
+				xx = %s(xx);
+				return *(num*)(&xx);
+			}
+		]], genUnaryCppProto(name), op)
+	end
+
+	local function genBinaryCppProto(name)
+		return string.format("num %s_AD(num x, num y)", name)
+	end
+
+	local function genBinaryCppImpl_Op(name, op)
+		return string.format([[
+			EXPORT %s
+			{
+				stan::agrad::var xx = *(stan::agrad::var*)(&x);
+				stan::agrad::var yy = *(stan::agrad::var*)(&y);
+				xx = xx %s yy;
+				return *(num*)(&xx);
+			}
+		]], genBinaryCppProto(name), op)
+	end
+
+	local function genBinaryCppImpl_Fn(name)
+		return string.format([[
+			EXPORT %s
+			{
+				stan::agrad::var xx = *(stan::agrad::var*)(&x);
+				stan::agrad::var yy = *(stan::agrad::var*)(&y);
+				xx = %s(xx, yy);
+				return *(num*)(&xx);
+			}
+		]], genBinaryCppProto(name), name)	
+	end
+
+	local headerFile = io.open(sourcefile:gsub("init.t", "adMath.h"), "w")
+	local cppFile = io.open(sourcefile:gsub("init.t", "adMath.cpp"), "w")
+	for i,v in ipairs(util.joinarrays(unaryOps, unaryFns)) do
+		headerFile:write(string.format("%s;\n", genUnaryCppProto(v[1])))
+		cppFile:write(string.format("%s\n", genUnaryCppImpl(v[1], v[2])))
+	end
+	for i,v in ipairs(binaryOps) do
+		headerFile:write(string.format("%s;\n", genBinaryCppProto(v[1])))
+		cppFile:write(string.format("%s\n", genBinaryCppImpl_Op(v[1], v[2])))
+	end
+	for i,v in ipairs(binaryFns) do
+		headerFile:write(string.format("%s;\n", genBinaryCppProto(v[1])))
+		cppFile:write(string.format("%s\n", genBinaryCppImpl_Fn(v[1], v[2])))
+	end
+	headerFile:close()
+	cppFile:close()
+
+	-- Actually build the shared library
 	local cppname = sourcefile:gsub("init.t", "hmc.cpp")
 	local varstack = string.format("%s/src/stan/agrad/rev/var_stack.cpp", stanroot)
 	util.wait(string.format("clang++ -shared -O3 -I%s -I%s -I%s %s %s -o %s", srcdir, eigendir, boostdir, cppname, varstack, soname))
@@ -56,5 +166,57 @@ function hmc.lpImplementationPreamble()
 end
 
 
+-- Add LuaJIT ctype metamethods/functions for arithmetic to hmc.num
+
+local function checkConvertToNum(n)
+	-- Not a complete check, but hopefully fast-ish
+	local t = type(n)
+	if t == "number"
+		then return hmc.makeNum(n)
+	else
+		return n
+	end
+end
+
+local numMT = {}
+for i,v in ipairs(unaryOps) do
+	local cfnname = string.format("%s_AD", v[1])
+	numMT[string.format("__%s", v[1])] =
+		function(n) return hmc[cfnname](checkConvertToNum(n)) end
+end
+for i,v in ipairs(binaryOps) do
+	local cfnname = string.format("%s_AD", v[1])
+	numMT[string.format("__%s", v[1])] =
+		function(n1, n2) return hmc[cfnname](checkConvertToNum(n1), checkConvertToNum(n2)) end
+end
+local dummynum = hmc.makeNum(42)
+ffi.metatype(dummynum, numMT)
+
+local admath = math
+for i,v in ipairs(unaryFns) do
+	admath[v[1]] =
+		function(n) return hmc[v[1]](checkConvertToNum(n)) end
+end
+for i,v in ipairs(binaryFns) do
+	admath[v[1]] =
+		function(n1, n2) return hmc[v[1]](checkConvertToNum(n1), checkConvertToNum(n2)) end
+end
+
+local _math = nil
+function hmc.toggleLuaAD(flag)
+	if flag then
+		_math = math
+		_G["math"] = admath
+	else
+		_G["math"] = _math
+		_math = nil
+	end
+end
+
+
+
 
 return hmc
+
+
+

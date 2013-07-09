@@ -63,6 +63,12 @@ extern "C"
 		return ((stan::agrad::var*)&n)->val();
 	}
 
+	EXPORT num makeNum(double val)
+	{
+		stan::agrad::var v(val);
+		return *(num*)&v;
+	}
+
 	EXPORT SamplerState* newSampler()
 	{
 		return new SamplerState;
@@ -120,6 +126,9 @@ extern "C"
 		memcpy(vals, &(samp.params_r())[0], numparams*sizeof(double));
 		return accepted;
 	}
+
+	// The AD arithmetic functions
+	#include "adMath.cpp"
 }
 
 

@@ -23,3 +23,6 @@ void setLogprobFunction(struct SamplerState* s, LogProbFunction lpfn);
 // 'vals' holds the current variable values and will be overwritten.
 int nextSample(struct SamplerState* s, double* vals);
 void setVariableValues(struct SamplerState* s, int numvals, double* vals);
+
+// C interfaces to dual number arithmetic
+#include "adMath.h"

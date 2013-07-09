@@ -151,15 +151,24 @@
 
 -------------------------------
 
-C = terralib.includec("stdio.h")
+-- C = terralib.includec("stdio.h")
 
-terra retpi()
-	var p = [math.pi]
-	C.printf("%g\n", p)
-	return p
-end
+-- terra retpi()
+-- 	var p = [math.pi]
+-- 	C.printf("%g\n", p)
+-- 	return p
+-- end
 
-print(retpi())
+-- print(retpi())
+
+---------------------------------
+
+hmc = terralib.require("probabilistic.hmc")
+hmc.toggleLuaAD(true)
+n1 = hmc.makeNum(42)
+n2 = hmc.makeNum(1)
+n3 = n1 + n2 + 1
+print(hmc.getValue(n3))
 
 
 

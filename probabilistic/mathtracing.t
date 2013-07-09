@@ -143,8 +143,6 @@ local irmath =
 	frexp = math.frexp,
 	huge = math.huge,
 	ldexp = math.ldexp,
-	max = math.max,
-	min = math.min,
 	modf = math.modf,
 	pi = math.pi,
 	rad = math.rad,
@@ -156,7 +154,6 @@ addWrappedUnaryFuncs(irmath, {
 	{"acos", "acos", math.acos},
 	{"asin", "asin", math.asin},
 	{"atan", "atan", math.atan},
-	{"atan2", "atan2", math.atan2},
 	{"ceil", "ceil", math.ceil},
 	{"cos", "cos", math.cos},
 	{"cosh", "cosh", math.cosh},
@@ -180,7 +177,10 @@ addWrappedUnaryFuncs(irmath, {
 	{"tanh", "tanh", math.tanh}
 })
 addWrappedBinaryFuncs(irmath, {
+	{"atan2", "atan2", math.atan2},
 	{"fmod", "fmod", math.fmod},
+	{"max", "fmax", math.max},
+	{"min", "fmin", math.min},
 	{"pow", "pow", math.pow}
 })
 
