@@ -387,6 +387,11 @@ function LARJInterpolationTrace:traceUpdate(structureIsFixed)
 	self.trace2:traceUpdate(structureIsFixed)
 end
 
+function LARJInterpolationTrace:flushLogProbs()
+	self.trace1:flushLogProbs()
+	self.trace2:flushLogProbs()
+end
+
 
 -- MCMC transition kernel that does reversible jumps using the LARJ algorithm
 local LARJKernel = {}

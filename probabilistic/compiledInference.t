@@ -599,7 +599,7 @@ function HMCKernel:next(currState, hyperparams)
 	-- Run traceUpdate once more to flush the dual numbers out of the trace
 	-- and update valid return values / log probs
 	self.setNonStructValues(self.currentTrace, self.varVals)
-	self.currentTrace:traceUpdate(true)
+	self.currentTrace:flushLogProbs()
 
 	return self.currentTrace
 end
@@ -611,7 +611,7 @@ function HMCKernel:makeLogProbFn()
 		local aTrace = this.currentTrace
 		this.setNonStructValues(aTrace, varVals)
 		hmc.toggleLuaAD(true)
-		aTrace:traceUpdate(true)
+		aTrace:flushLogProbs()
 		hmc.toggleLuaAD(false)
 		-- We return the inner implementation of the dual num, because
 		-- Lua functions called from Terra cannot return aggregates by value

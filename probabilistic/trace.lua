@@ -189,6 +189,15 @@ function RandomExecutionTrace:traceUpdate(structureIsFixed)
 	trace = origtrace
 end
 
+-- Recompute all ERP prior logprobs, and then the full logprob
+-- using a traceUpdate
+function RandomExecutionTrace:flushLogProbs()
+	for i,v in pairs(self.varlist) do
+		v.logprob = v.erp:logprob(v.val, v.params)
+	end
+	self:traceUpdate(true)
+end
+
 
 -- Return the current structural name, as determined by the interpreter stack
 function RandomExecutionTrace:currentName(numFrameSkip)
