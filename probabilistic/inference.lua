@@ -601,6 +601,7 @@ local function mcmc(computation, kernel, kernelparams)
 	for i=1,iters do
 		if kernelparams.verbose then
 			io.write(string.format("iteration %d\r", i))
+			io.flush()
 		end
 		currentState = kernel:next(currentState)
 		if i % kernelparams.lag == 0 then

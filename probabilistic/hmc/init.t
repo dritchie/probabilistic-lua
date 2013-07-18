@@ -181,25 +181,45 @@ end
 local numMT = {}
 for i,v in ipairs(unaryOps) do
 	local cfnname = string.format("%s_AD", v[1])
+	local cfn = hmc[cfnname]
 	numMT[string.format("__%s", v[1])] =
-		function(n) return hmc[cfnname](checkConvertToNum(n)) end
+		function(n) return cfn(checkConvertToNum(n)) end
 end
 for i,v in ipairs(binaryOps) do
 	local cfnname = string.format("%s_AD", v[1])
+	local cfn = hmc[cfnname]
 	numMT[string.format("__%s", v[1])] =
-		function(n1, n2) return hmc[cfnname](checkConvertToNum(n1), checkConvertToNum(n2)) end
+		function(n1, n2) return cfn(checkConvertToNum(n1), checkConvertToNum(n2)) end
 end
 local dummynum = hmc.makeNum(42)
 ffi.metatype(dummynum, numMT)
 
-local admath = math
+local admath = util.copytable(math)
 for i,v in ipairs(unaryFns) do
+	local origMathFn = math[v[1]]
+	local cfnname = string.format("%s_AD", v[1])
+	local cfn = hmc[cfnname]
 	admath[v[1]] =
-		function(n) return hmc[v[1]](checkConvertToNum(n)) end
+		function(n)
+			if type(n) == "number" then
+				return origMathFn(n)
+			else
+				return cfn(checkConvertToNum(n)) 
+			end
+		end
 end
 for i,v in ipairs(binaryFns) do
+	local origMathFn = math[v[1]]
+	local cfnname = string.format("%s_AD", v[1])
+	local cfn = hmc[cfnname]
 	admath[v[1]] =
-		function(n1, n2) return hmc[v[1]](checkConvertToNum(n1), checkConvertToNum(n2)) end
+		function(n1, n2)
+			if type(n1) == "number" and type(n2) == "number" then
+				return origMathFn(n1, n2)
+			else
+				return cfn(checkConvertToNum(n1), checkConvertToNum(n2))
+			end
+		end
 end
 
 local _math = nil

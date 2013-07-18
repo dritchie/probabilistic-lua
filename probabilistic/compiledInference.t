@@ -535,6 +535,101 @@ function CompiledHMCKernel:genStepFunction()
 end
 
 
+-- (This is not really a 'compiled' kernel, but it uses Terra code, so it makes
+--  more sense to put it here than in inference.lua)
+-- MCMC kernel that does HMC for fixed-structure collections of continuous
+-- random variables.
+local HMCKernel = {}
+
+-- No default parameters needed
+
+function HMCKernel:new()
+	local newobj = 
+	{
+		proposalsMade = 0,
+		proposalsAccepted = 0,
+		sampler = hmc.newSampler()
+	}
+	ffi.gc(newobj.sampler, function(self) hmc.deleteSampler(self) end)
+
+	setmetatable(newobj, self)
+	self.__index = self
+
+	newobj.lpfn = newobj:makeLogProbFn()
+	hmc.setLogprobFunction(newobj.sampler, newobj.lpfn.definitions[1]:getpointer())
+
+	return newobj
+end
+
+function HMCKernel:assumeControl(currTrace)
+
+	self.currentTrace = currTrace:deepcopy()
+
+	local nonStructNames = self.currentTrace:freeVarNames(false, true)
+	local numVars = #nonStructNames
+	self.varVals = terralib.new(double[numVars])
+	for i,n in pairs(nonStructNames) do
+		self.varVals[i-1] = self.currentTrace:getRecord(n):getProp("val")
+	end
+
+	self.setNonStructValues = function(aTrace, varVals)
+		for i,n in ipairs(nonStructNames) do
+			aTrace:getRecord(n):setProp("val", varVals[i-1])
+		end
+	end
+
+	hmc.setVariableValues(self.sampler, numVars, self.varVals)
+
+	return self.currentTrace
+end
+
+function HMCKernel:releaseControl(currState)
+	return currState
+end
+
+function HMCKernel:next(currState, hyperparams)
+
+	self.currentTrace = currState:deepcopy()
+	local accepted = util.int2bool(hmc.nextSample(self.sampler, self.varVals))
+	self.proposalsMade = self.proposalsMade + 1
+	if accepted then
+		self.proposalsAccepted = self.proposalsAccepted + 1
+	end
+
+	-- Run traceUpdate once more to flush the dual numbers out of the trace
+	-- and update valid return values / log probs
+	self.setNonStructValues(self.currentTrace, self.varVals)
+	self.currentTrace:traceUpdate(true)
+
+	return self.currentTrace
+end
+
+function HMCKernel:makeLogProbFn()
+	local this = self
+	local function lpfn(varVals)
+		-- Copy dual number values into the trace, run traceupdate
+		local aTrace = this.currentTrace
+		this.setNonStructValues(aTrace, varVals)
+		hmc.toggleLuaAD(true)
+		aTrace:traceUpdate(true)
+		hmc.toggleLuaAD(false)
+		-- We return the inner implementation of the dual num, because
+		-- Lua functions called from Terra cannot return aggregates by value
+		return aTrace.logprob.impl
+	end
+
+	lpfn = terralib.cast({&hmc.num} -> {&uint8}, lpfn)
+	return terra(varVals: &hmc.num)
+		var impl = lpfn(varVals)
+		return hmc.num { impl }
+	end
+end
+
+function HMCKernel:stats()
+	print(string.format("Acceptance ratio: %g (%u/%u)", self.proposalsAccepted/self.proposalsMade,
+													self.proposalsAccepted, self.proposalsMade))
+end
+
 
 -- Sample from a fixed-structure probabilistic computation for some
 -- number of iterations using compiled Gaussian drift MH
@@ -576,11 +671,32 @@ local function LARJHMC_JIT(computation, params)
 					params)
 end
 
+local function HMC(computation, params)
+	params = inf.KernelParams:new(params)
+	return inf.mcmc(computation,
+					HMCKernel:new(),
+					params)
+end
+
+local function LARJHMC(computation, params)
+	params = inf.KernelParams:new(params)
+	return inf.mcmc(computation,
+					inf.LARJKernel:new(
+						HMCKernel:new(),
+						params.annealSteps, params.jumpFreq),
+					params)
+end
+
 -- Module exports
 return
 {
 	driftMH_JIT = driftMH_JIT,
 	LARJDriftMH_JIT = LARJDriftMH_JIT,
 	HMC_JIT = HMC_JIT,
-	LARJHMC_JIT = LARJHMC_JIT
+	LARJHMC_JIT = LARJHMC_JIT,
+	HMC = HMC,
+	LARJHMC = LARJHMC
 }
+
+
+
