@@ -30,9 +30,9 @@ local binaryOps =
 	{"sub", "-"},
 	{"mul", "*"},
 	{"div", "/"},
-	{"eq", "=="},
-	{"lt", "<"},
-	{"le", "<="}
+	{"eq", "==", true},
+	{"lt", "<", true},
+	{"le", "<=", true}
 }
 local binaryFns = 
 {
@@ -68,12 +68,14 @@ else
 	-- Generate C++ prototypes and implementations for all the arithmetic functions we need
 	-- Write them to files that are included by hmc.h and hmc.cpp
 
-	local function genUnaryCppProto(name)
+	local function genUnaryCppProto(record)
+		local name = record[1]
 		return string.format("num %s_AD(num x)", name)
 	end
 
-	local function genUnaryCppImpl(name, op)
-		op = op or name
+	local function genUnaryCppImpl(record)
+		local name = record[1]
+		local op = record[2] or name
 		return string.format([[
 			EXPORT %s
 			{
@@ -81,15 +83,35 @@ else
 				xx = %s(xx);
 				return *(num*)(&xx);
 			}
-		]], genUnaryCppProto(name), op)
+		]], genUnaryCppProto(record), op)
 	end
 
-	local function genBinaryCppProto(name)
-		return string.format("num %s_AD(num x, num y)", name)
+	local function genBinaryCppProto(record)
+		local name = record[1]
+		local isBool = record[3]
+		if isBool then
+			return string.format("int %s_AD(num x, num y)", name)
+		else
+			return string.format("num %s_AD(num x, num y)", name)
+		end
 	end
 
-	local function genBinaryCppImpl_Op(name, op)
-		return string.format([[
+	local function genBinaryCppImpl_Op(record)
+		local name = record[1]
+		local op = record[2]
+		local isBool = record[3]
+		if isBool then
+			return string.format([[
+			EXPORT %s
+			{
+				stan::agrad::var xx = *(stan::agrad::var*)(&x);
+				stan::agrad::var yy = *(stan::agrad::var*)(&y);
+				bool b = xx %s yy;
+				return (int)b;
+			}
+			]], genBinaryCppProto(record), op)
+		else
+			return string.format([[
 			EXPORT %s
 			{
 				stan::agrad::var xx = *(stan::agrad::var*)(&x);
@@ -97,10 +119,12 @@ else
 				xx = xx %s yy;
 				return *(num*)(&xx);
 			}
-		]], genBinaryCppProto(name), op)
+			]], genBinaryCppProto(record), op)
+		end
 	end
 
-	local function genBinaryCppImpl_Fn(name)
+	local function genBinaryCppImpl_Fn(record)
+		local name = record[1]
 		return string.format([[
 			EXPORT %s
 			{
@@ -109,22 +133,22 @@ else
 				xx = %s(xx, yy);
 				return *(num*)(&xx);
 			}
-		]], genBinaryCppProto(name), name)	
+		]], genBinaryCppProto(record), name)	
 	end
 
 	local headerFile = io.open(sourcefile:gsub("init.t", "adMath.h"), "w")
 	local cppFile = io.open(sourcefile:gsub("init.t", "adMath.cpp"), "w")
 	for i,v in ipairs(util.joinarrays(unaryOps, unaryFns)) do
-		headerFile:write(string.format("%s;\n", genUnaryCppProto(v[1])))
-		cppFile:write(string.format("%s\n", genUnaryCppImpl(v[1], v[2])))
+		headerFile:write(string.format("%s;\n", genUnaryCppProto(v)))
+		cppFile:write(string.format("%s\n", genUnaryCppImpl(v)))
 	end
 	for i,v in ipairs(binaryOps) do
-		headerFile:write(string.format("%s;\n", genBinaryCppProto(v[1])))
-		cppFile:write(string.format("%s\n", genBinaryCppImpl_Op(v[1], v[2])))
+		headerFile:write(string.format("%s;\n", genBinaryCppProto(v)))
+		cppFile:write(string.format("%s\n", genBinaryCppImpl_Op(v)))
 	end
 	for i,v in ipairs(binaryFns) do
-		headerFile:write(string.format("%s;\n", genBinaryCppProto(v[1])))
-		cppFile:write(string.format("%s\n", genBinaryCppImpl_Fn(v[1], v[2])))
+		headerFile:write(string.format("%s;\n", genBinaryCppProto(v)))
+		cppFile:write(string.format("%s\n", genBinaryCppImpl_Fn(v)))
 	end
 	headerFile:close()
 	cppFile:close()
@@ -188,8 +212,14 @@ end
 for i,v in ipairs(binaryOps) do
 	local cfnname = string.format("%s_AD", v[1])
 	local cfn = hmc[cfnname]
-	numMT[string.format("__%s", v[1])] =
-		function(n1, n2) return cfn(checkConvertToNum(n1), checkConvertToNum(n2)) end
+	local isBool = v[3]
+	if isBool then
+		numMT[string.format("__%s", v[1])] =
+			function(n1, n2) return util.int2bool(cfn(checkConvertToNum(n1), checkConvertToNum(n2))) end
+	else
+		numMT[string.format("__%s", v[1])] =
+			function(n1, n2) return cfn(checkConvertToNum(n1), checkConvertToNum(n2)) end
+	end
 end
 local dummynum = hmc.makeNum(42)
 ffi.metatype(dummynum, numMT)

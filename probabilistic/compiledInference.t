@@ -580,6 +580,9 @@ function HMCKernel:assumeControl(currTrace)
 
 	hmc.setVariableValues(self.sampler, numVars, self.varVals)
 
+	-- ???
+	self.currentTrace = currTrace
+
 	return self.currentTrace
 end
 
@@ -598,6 +601,9 @@ function HMCKernel:next(currState, hyperparams)
 
 	-- Run traceUpdate once more to flush the dual numbers out of the trace
 	-- and update valid return values / log probs
+	-- This also makes sure that the values in the trace reflect the correct
+	-- (most recently accepted) state, and not simply the state from the last
+	-- time the log prob function was called.
 	self.setNonStructValues(self.currentTrace, self.varVals)
 	self.currentTrace:flushLogProbs()
 
