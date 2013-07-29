@@ -38,6 +38,14 @@ function M.keys(tab)
 	return newtbl
 end
 
+function M.listToSet(tab)
+	local set = {}
+	for i,v in ipairs(tab) do
+		set[v] = true
+	end
+	return set
+end
+
 function M.sum(...)
 	local s = 0
 	local n = select("#", ...)

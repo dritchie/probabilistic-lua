@@ -4,7 +4,7 @@ This file implements the HMC sampling library and is compiled into a shared libr
 
 #include "stan/agrad/agrad.hpp"
 #include "stan/model/prob_grad_ad.hpp"
-#include "stan/mcmc/nuts.hpp"
+#include "nuts_diaggiven.hpp"
 
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
@@ -50,7 +50,7 @@ struct SamplerState
 {
 public:
 	FunctionPoinderModel model;
-	stan::mcmc::nuts<boost::mt19937>* sampler;
+	stan::mcmc::nuts_diaggiven<boost::mt19937>* sampler;
 	SamplerState() : model(), sampler(NULL) {}
 }; 
 
@@ -100,12 +100,20 @@ extern "C"
 		if (s->sampler == NULL)
 		{
 			std::vector<int> params_i;
-			s->sampler = new stan::mcmc::nuts<>(s->model, params_r, params_i);
+			s->sampler = new stan::mcmc::nuts_diaggiven<>(s->model, params_r, params_i);
 		}
 		else
 		{
 			s->sampler->set_params_r(params_r);
+			s->sampler->reset_step_sizes(numvals);
 		}
+	}
+
+	EXPORT void setVariableStepSizes(SamplerState* s, double* stepSizes)
+	{
+		std::vector<double> steps(s->model.num_params_r());
+		memcpy(&steps[0], stepSizes, s->model.num_params_r()*sizeof(double));
+		s->sampler->set_step_sizes(steps);
 	}
 
 	EXPORT int nextSample(SamplerState* s, double* vals)
@@ -123,7 +131,8 @@ extern "C"
 				break;
 			}
 		}
-		memcpy(vals, &(samp.params_r())[0], numparams*sizeof(double));
+
+		memcpy(vals, &newvals[0], numparams*sizeof(double));
 		return accepted;
 	}
 

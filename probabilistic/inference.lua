@@ -213,6 +213,10 @@ function RandomWalkKernel:stats()
 														self.proposalsAccepted, self.proposalsMade))
 end
 
+function RandomWalkKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
+	-- Default is to do nothing
+end
+
 
 -- MCMC Transition kernel that takes random walks for contiuous variables
 -- by perform single-variable gaussian drift
@@ -279,6 +283,11 @@ end
 function GaussianDriftKernel:stats()
 	print(string.format("Acceptance ratio: %g (%u/%u)", self.proposalsAccepted/self.proposalsMade,
 														self.proposalsAccepted, self.proposalsMade))
+end
+
+function GaussianDriftKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
+	-- Default is to do nothing
+	-- We could make it less likely to propose a change certain variables based on alpha
 end
 
 
@@ -493,7 +502,7 @@ function LARJKernel:jumpStep(currTrace)
 	-- -- for DEBUG output
 	-- local lps = {}
 	-- local acceptRejects = {}
-	local newLpWithoutAnnealing = newStructTrace.logprob
+	-- local newLpWithoutAnnealing = newStructTrace.logprob
 
 	-- We only actually do annealing if we have any non-structural variables and we're
 	-- doing more than zero annealing steps
@@ -509,9 +518,18 @@ function LARJKernel:jumpStep(currTrace)
 		local lerpState = self.diffusionKernel:assumeControl(lerpTrace)
 		self.isDiffusing = true
 
+		self.diffusionKernel.annealing = true
+		--print("BEGIN ANNEALING")
+
+		local oldVars = lerpTrace.trace1:varDiff(lerpTrace.trace2)
+		local newVars = lerpTrace.trace2:varDiff(lerpTrace.trace1)
+
 		for aStep=0,self.annealSteps-1 do
 			--local prevacc = self.diffusionKernel.proposalsAccepted -------
-			lerpTrace.alpha:setValue(aStep/(self.annealSteps-1))
+			--local alpha = 1.0
+			local alpha = aStep/(self.annealSteps-1)
+			lerpTrace.alpha:setValue(alpha)
+			self.diffusionKernel:tellLARJStatus(alpha, oldVars, newVars)
 			--table.insert(lps, lerpState.logprob) -------
 			annealingLpRatio = annealingLpRatio + lerpState.logprob
 			lerpState = self.diffusionKernel:next(lerpState, hyperparams)
@@ -519,6 +537,9 @@ function LARJKernel:jumpStep(currTrace)
 			annealingLpRatio = annealingLpRatio - lerpState.logprob
 			--table.insert(acceptRejects, self.diffusionKernel.proposalsAccepted ~= prevacc) -------
 		end
+
+		--print("END ANNEALING")
+		self.diffusionKernel.annealing = false
 
 		lerpTrace = self.diffusionKernel:releaseControl(lerpState)
 		lerpTrace = self:assumeControl(lerpTrace)
@@ -536,18 +557,23 @@ function LARJKernel:jumpStep(currTrace)
 	local accepted = newStructTrace.conditionsSatisfied and math.log(math.random()) < acceptanceProb
 
 	-- DEBUG output
-	-- if newStructTrace.logprob - currTrace.logprob > 0 then
-	-- 	print("---------------")
-	-- 	print("newStructTrace.logprob: ", newStructTrace.logprob)
-	-- 	print("currTrace.logprob:", currTrace.logprob)
-	-- 	print("rvsPropLP:", rvsPropLP)
-	-- 	print("fwdPropLP:", fwdPropLP)
-	-- 	print(string.format("annealingLpRatio: %g", annealingLpRatio))
-	-- 	print(string.format("acceptanceProb: %g", acceptanceProb))
-	-- 	print(string.format("lpDiffWithoutAnnealing: %g", newLpWithoutAnnealing - currTrace.logprob))
-	-- 	print(string.format("lpDiffWithAnnealing: %g", newStructTrace.logprob - currTrace.logprob))
-	-- 	print(string.format("diffAnnealingMade: %g", newStructTrace.logprob - newLpWithoutAnnealing))
+	-- print("---------------")
+	-- for n,v in pairs(oldStructTrace.vars) do
+	-- 	print(v.logprob)
 	-- end
+	-- print("accepted:", accepted)
+	-- print("newStructTrace.logprob: ", newStructTrace.logprob)
+	-- print("currTrace.logprob:", currTrace.logprob)
+	-- print("rvsPropLP:", rvsPropLP)
+	-- print("log propsal prob:", var.erp:logProposalProb(propval, origval, var.params))
+	-- print("lpDiff:", oldStructTrace:lpDiff(newStructTrace))
+	-- print("log num vars:", math.log(newNumVars))
+	-- print("fwdPropLP:", fwdPropLP)
+	-- print(string.format("annealingLpRatio: %g", annealingLpRatio))
+	-- print(string.format("acceptanceProb: %g", acceptanceProb))
+	-- print(string.format("lpDiffWithoutAnnealing: %g", newLpWithoutAnnealing - currTrace.logprob))
+	-- print(string.format("lpDiffWithAnnealing: %g", newStructTrace.logprob - currTrace.logprob))
+	-- print(string.format("diffAnnealingMade: %g", newStructTrace.logprob - newLpWithoutAnnealing))
 	--if accepted then
 		-- print("==========")
 		-- print("Old num nonstructs:", table.getn(oldStructTrace:freeVarNames(false, true)))

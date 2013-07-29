@@ -378,6 +378,10 @@ function CompiledKernel:stats()
 														self.proposalsAccepted, self.proposalsMade))
 end
 
+function CompiledKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
+	-- Default is to do nothing
+end
+
 
 -- An MCMC kernel that performs continuious gaussian drift
 -- by JIT-compiling all proposal/probability calculations
@@ -567,6 +571,8 @@ function HMCKernel:assumeControl(currTrace)
 
 	local nonStructNames = self.currentTrace:freeVarNames(false, true)
 	local numVars = #nonStructNames
+	self.numVars = numVars
+	self.nonStructNames = nonStructNames
 	self.varVals = terralib.new(double[numVars])
 	for i,n in pairs(nonStructNames) do
 		self.varVals[i-1] = self.currentTrace:getRecord(n):getProp("val")
@@ -580,9 +586,7 @@ function HMCKernel:assumeControl(currTrace)
 
 	hmc.setVariableValues(self.sampler, numVars, self.varVals)
 
-	-- ???
 	self.currentTrace = currTrace
-
 	return self.currentTrace
 end
 
@@ -607,6 +611,22 @@ function HMCKernel:next(currState, hyperparams)
 	self.setNonStructValues(self.currentTrace, self.varVals)
 	self.currentTrace:flushLogProbs()
 
+	-- if self.annealing then
+	-- 	print("-----------------")
+	-- 	print("==== TRACE 1 ====")
+	-- 	for i,v in ipairs(self.currentTrace.trace1.varlist) do
+	-- 		print(v.val)
+	-- 	end
+	-- 	print("==== TRACE 2 ====")
+	-- 	for i,v in ipairs(self.currentTrace.trace2.varlist) do
+	-- 		print(v.val)
+	-- 	end
+	-- 	print("== LERP TRACE ==")
+	-- 	for i,n in ipairs(self.currentTrace:freeVarNames(true, true)) do
+	-- 		print(self.currentTrace:getRecord(n):getProp("val"))
+	-- 	end
+	-- end
+
 	return self.currentTrace
 end
 
@@ -618,10 +638,11 @@ function HMCKernel:makeLogProbFn()
 		this.setNonStructValues(aTrace, varVals)
 		hmc.toggleLuaAD(true)
 		aTrace:flushLogProbs()
-		hmc.toggleLuaAD(false)
 		-- We return the inner implementation of the dual num, because
 		-- Lua functions called from Terra cannot return aggregates by value
-		return aTrace.logprob.impl
+		local retval = aTrace.logprob.impl
+		hmc.toggleLuaAD(false)
+		return retval
 	end
 
 	lpfn = terralib.cast({&hmc.num} -> {&uint8}, lpfn)
@@ -635,6 +656,23 @@ function HMCKernel:stats()
 	print(string.format("Acceptance ratio: %g (%u/%u)", self.proposalsAccepted/self.proposalsMade,
 													self.proposalsAccepted, self.proposalsMade))
 end
+
+function HMCKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
+	-- We need to adjust the step size of certain variables based on alpha.
+	local oldVarSet = util.listToSet(oldVarNames)
+	local newVarSet = util.listToSet(newVarNames)
+	local stepSizes = terralib.new(double[self.numVars], 1.0)
+	for i,n in ipairs(self.nonStructNames) do
+		if oldVarSet[n] then
+			stepSizes[i-1] = 1.0 / (1.0 - alpha)
+		elseif newVarSet[n] then
+			stepSizes[i-1] = 1.0 / alpha
+		end
+	end
+	hmc.setVariableStepSizes(self.sampler, stepSizes)
+end
+
+
 
 
 -- Sample from a fixed-structure probabilistic computation for some
