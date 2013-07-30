@@ -502,7 +502,7 @@ function LARJKernel:jumpStep(currTrace)
 	-- -- for DEBUG output
 	-- local lps = {}
 	-- local acceptRejects = {}
-	-- local newLpWithoutAnnealing = newStructTrace.logprob
+	local newLpWithoutAnnealing = newStructTrace.logprob
 
 	-- We only actually do annealing if we have any non-structural variables and we're
 	-- doing more than zero annealing steps
@@ -541,6 +541,19 @@ function LARJKernel:jumpStep(currTrace)
 		--print("END ANNEALING")
 		self.diffusionKernel.annealing = false
 
+		print("==================")
+		for i,n in ipairs(lerpState.trace1:freeVarNames(false, true)) do
+			print(lerpState.trace1:getRecord(n):getProp("val"), lerpState.trace1:getRecord(n):getProp("logprob"))
+		end
+		print("- - - - - - - - - ")
+		for i,n in ipairs(lerpState.trace2:freeVarNames(false, true)) do
+			print(lerpState.trace2:getRecord(n):getProp("val"), lerpState.trace2:getRecord(n):getProp("logprob"))
+		end
+		print("- - - - - - - - - ")
+		for i,n in ipairs(lerpState:freeVarNames(false, true)) do
+			print(lerpState:getRecord(n):getProp("val"), lerpState:getRecord(n):getProp("logprob"))
+		end
+
 		lerpTrace = self.diffusionKernel:releaseControl(lerpState)
 		lerpTrace = self:assumeControl(lerpTrace)
 
@@ -557,23 +570,20 @@ function LARJKernel:jumpStep(currTrace)
 	local accepted = newStructTrace.conditionsSatisfied and math.log(math.random()) < acceptanceProb
 
 	-- DEBUG output
-	-- print("---------------")
-	-- for n,v in pairs(oldStructTrace.vars) do
-	-- 	print(v.logprob)
-	-- end
-	-- print("accepted:", accepted)
-	-- print("newStructTrace.logprob: ", newStructTrace.logprob)
-	-- print("currTrace.logprob:", currTrace.logprob)
-	-- print("rvsPropLP:", rvsPropLP)
-	-- print("log propsal prob:", var.erp:logProposalProb(propval, origval, var.params))
-	-- print("lpDiff:", oldStructTrace:lpDiff(newStructTrace))
-	-- print("log num vars:", math.log(newNumVars))
-	-- print("fwdPropLP:", fwdPropLP)
-	-- print(string.format("annealingLpRatio: %g", annealingLpRatio))
-	-- print(string.format("acceptanceProb: %g", acceptanceProb))
-	-- print(string.format("lpDiffWithoutAnnealing: %g", newLpWithoutAnnealing - currTrace.logprob))
-	-- print(string.format("lpDiffWithAnnealing: %g", newStructTrace.logprob - currTrace.logprob))
-	-- print(string.format("diffAnnealingMade: %g", newStructTrace.logprob - newLpWithoutAnnealing))
+	print("---------------")
+	print("accepted:", accepted)
+	print("newStructTrace.logprob: ", newStructTrace.logprob)
+	print("currTrace.logprob:", currTrace.logprob)
+	print("rvsPropLP:", rvsPropLP)
+	print("log propsal prob:", var.erp:logProposalProb(propval, origval, var.params))
+	print("lpDiff:", oldStructTrace:lpDiff(newStructTrace))
+	print("log num vars:", math.log(newNumVars))
+	print("fwdPropLP:", fwdPropLP)
+	print(string.format("annealingLpRatio: %g", annealingLpRatio))
+	print(string.format("acceptanceProb: %g", acceptanceProb))
+	print(string.format("lpDiffWithoutAnnealing: %g", newLpWithoutAnnealing - currTrace.logprob))
+	print(string.format("lpDiffWithAnnealing: %g", newStructTrace.logprob - currTrace.logprob))
+	print(string.format("diffAnnealingMade: %g", newStructTrace.logprob - newLpWithoutAnnealing))
 	--if accepted then
 		-- print("==========")
 		-- print("Old num nonstructs:", table.getn(oldStructTrace:freeVarNames(false, true)))

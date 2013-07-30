@@ -24,8 +24,35 @@ namespace stan {
 
   namespace mcmc {
 
+    /* Alternate version of function in util.hpp */
+    // Returns the new log probability of x and m
+    // Catches domain errors and sets logp as -inf.
+    // Uses a diagonal mass matrix
+    double diag_leapfrog(stan::model::prob_grad& model, 
+                         std::vector<int> z, 
+                         const std::vector<double>& inv_masses,
+                         std::vector<double>& x, std::vector<double>& m,
+                         std::vector<double>& g, double epsilon,
+                         std::ostream* error_msgs = 0,
+                         std::ostream* output_msgs = 0) {
+      for (size_t i = 0; i < m.size(); i++)
+        m[i] += 0.5 * epsilon * g[i];
+      for (size_t i = 0; i < x.size(); i++)
+        x[i] += epsilon * inv_masses[i] * m[i];
+      double logp;
+      try {
+        logp = model.grad_log_prob(x, z, g, output_msgs);
+      } catch (std::domain_error e) {
+        write_error_msgs(error_msgs,e);
+        logp = -std::numeric_limits<double>::infinity();
+      }
+      for (size_t i = 0; i < m.size(); i++)
+        m[i] += 0.5 * epsilon * g[i];
+      return logp;
+    }
+
     /**
-     * No-U-Turn Sampler (NUTS) with varying step sizes.
+     * No-U-Turn Sampler (NUTS) with given diagonal mass matrix.
      *
      * The NUTS sampler requires a probability model with the ability
      * to compute gradients, characterized as an instance of
@@ -44,27 +71,22 @@ namespace stan {
       // depth of last sample taken (-1 before any samples)
       int _lastdepth;
 
-      // Vector of per-parameter step sizes.
-      std::vector<double> _step_sizes;
+      // Vector of per-parameter inverse masses.
+      std::vector<double> _inv_masses;
 
       /**
        * Determine whether we've started to make a "U-turn" at either end
        * of the position-state trajectory beginning with {xminus, mminus}
-       * and ending with {xplus, mplus}.  The dot products are
-       * adjusted for the diagonal step size matrix.
+       * and ending with {xplus, mplus}.
        *
        * @return false if we've made a U-turn, true otherwise.
        */
       inline static bool compute_criterion(std::vector<double>& xplus,
                                            std::vector<double>& xminus,
                                            std::vector<double>& mplus,
-                                           std::vector<double>& mminus,
-                                           std::vector<double>& step_sizes) {
+                                           std::vector<double>& mminus) {
         std::vector<double> total_direction;
         stan::math::sub(xplus, xminus, total_direction);
-        // adjustment for U-turn due to step sizes
-        for (size_t i = 0; i < total_direction.size(); ++i)
-          total_direction[i] /= step_sizes[i];
         return stan::math::dot(total_direction, mminus) > 0
             && stan::math::dot(total_direction, mplus) > 0;
       }
@@ -119,7 +141,7 @@ namespace stan {
           _maxchange(-1000),
           _maxdepth(maxdepth),
           _lastdepth(-1),
-          _step_sizes(model.num_params_r(), 1.0)
+          _inv_masses(model.num_params_r(), 1.0)
       {
         // start at 10 * epsilon because NUTS cheaper for larger epsilon
         this->adaptation_init(10.0);
@@ -141,7 +163,7 @@ namespace stan {
         // Initialize the algorithm
         std::vector<double> mminus(this->_model.num_params_r());
         for (size_t i = 0; i < mminus.size(); ++i)
-          mminus[i] = this->_rand_unit_norm();
+          mminus[i] = this->_rand_unit_norm() * this->_inv_masses[i];
         std::vector<double> mplus(mminus);
         // The log-joint probability of the momentum and position terms, i.e.
         // -(kinetic energy + potential energy)
@@ -192,7 +214,7 @@ namespace stan {
           // We can't look at the results of this last doubling if criterion==false
           if (!criterion)
             break;
-          criterion = compute_criterion(xplus, xminus, mplus, mminus, _step_sizes);
+          criterion = compute_criterion(xplus, xminus, mplus, mminus);
           // Metropolis-Hastings to determine if we can jump to a point in
           // the new half-tree
           if (this->_rand_uniform_01() < float(newnvalid) / (1e-100+float(nvalid))) {
@@ -250,14 +272,14 @@ namespace stan {
           values.push_back(this->_epsilon_last);
       }
 
-      void set_step_sizes(const std::vector<double>& new_sizes)
+      void set_inv_masses(const std::vector<double>& invmasses)
       {
-        _step_sizes = new_sizes;
+        _inv_masses = invmasses;
       }
 
-      void reset_step_sizes(size_t num)
+      void reset_inv_masses(size_t num)
       {
-        _step_sizes = std::vector<double>(num, 1.0);
+        _inv_masses = std::vector<double>(num, 1.0);
       }
 
       /**
@@ -318,10 +340,10 @@ namespace stan {
           xminus = x;
           gradminus = grad;
           mminus = m;
-          newlogp = rescaled_leapfrog(this->_model, this->_z, _step_sizes, 
-                                      xminus, mminus, gradminus, 
-                                      direction * this->_epsilon_last,
-                                      this->_error_msgs, this->_output_msgs);
+          newlogp = diag_leapfrog(this->_model, this->_z, _inv_masses, 
+                                  xminus, mminus, gradminus, 
+                                  direction * this->_epsilon_last,
+                                  this->_error_msgs, this->_output_msgs);
           newx = xminus;
           newgrad = gradminus;
           xplus = xminus;
@@ -370,7 +392,7 @@ namespace stan {
             criterion &= criterion2;
             nvalid += nvalid2;
           }
-          criterion &= compute_criterion(xplus, xminus, mplus, mminus, _step_sizes);
+          criterion &= compute_criterion(xplus, xminus, mplus, mminus);
         }
       }
 

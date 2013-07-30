@@ -661,15 +661,17 @@ function HMCKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
 	-- We need to adjust the step size of certain variables based on alpha.
 	local oldVarSet = util.listToSet(oldVarNames)
 	local newVarSet = util.listToSet(newVarNames)
-	local stepSizes = terralib.new(double[self.numVars], 1.0)
+	local invmasses = terralib.new(double[self.numVars], 1.0)
+	local oldScale = (1.0-alpha)
+	local newScale = alpha
 	for i,n in ipairs(self.nonStructNames) do
 		if oldVarSet[n] then
-			stepSizes[i-1] = 1.0 / (1.0 - alpha)
+			invmasses[i-1] = oldScale
 		elseif newVarSet[n] then
-			stepSizes[i-1] = 1.0 / alpha
+			invmasses[i-1] = newScale
 		end
 	end
-	hmc.setVariableStepSizes(self.sampler, stepSizes)
+	hmc.setVariableInvMasses(self.sampler, invmasses)
 end
 
 

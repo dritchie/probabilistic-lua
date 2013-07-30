@@ -105,15 +105,15 @@ extern "C"
 		else
 		{
 			s->sampler->set_params_r(params_r);
-			s->sampler->reset_step_sizes(numvals);
+			s->sampler->reset_inv_masses(numvals);
 		}
 	}
 
-	EXPORT void setVariableStepSizes(SamplerState* s, double* stepSizes)
+	EXPORT void setVariableInvMasses(SamplerState* s, double* invmasses)
 	{
-		std::vector<double> steps(s->model.num_params_r());
-		memcpy(&steps[0], stepSizes, s->model.num_params_r()*sizeof(double));
-		s->sampler->set_step_sizes(steps);
+		std::vector<double> imasses(s->model.num_params_r());
+		memcpy(&imasses[0], invmasses, s->model.num_params_r()*sizeof(double));
+		s->sampler->set_inv_masses(imasses);
 	}
 
 	EXPORT int nextSample(SamplerState* s, double* vals)
