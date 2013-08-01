@@ -30,7 +30,7 @@ end
 
 function larjtest(name, computation, trueExpectation, tolerance)
 	tolerance = tolerance or errorTolerance
-	test(name, replicate(runs, function() return expectation(computation, LARJTraceMH, {numsamps=samples, lag=lag, annealSteps=larjAnnealSteps}) end), trueExpectation, tolerance)
+	test(name, replicate(runs, function() return expectation(computation, LARJTraceMH, {numsamps=samples, lag=lag, annealIntervals=larjAnnealSteps}) end), trueExpectation, tolerance)
 end
 
 function customtest(name, computation, trueExpectation, tolerance, sampler, params)
@@ -509,7 +509,7 @@ if terralib then
 			0.1,
 			errorTolerance,
 			sampler,
-			{numsamps=samples, lag=lag, annealSteps=larjAnnealSteps, defaultBandwidth=0.5, verbose=false})
+			{numsamps=samples, lag=lag, annealIntervals=larjAnnealSteps, defaultBandwidth=0.5, verbose=false})
 	end
 	larjDrift("trans-dimensional gaussian drift (with annealing)", LARJDriftMH)
 	larjDrift("compiled trans-dimensional gaussian drift (with annealing)", LARJDriftMH_JIT)

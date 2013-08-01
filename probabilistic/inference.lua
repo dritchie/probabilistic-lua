@@ -406,13 +406,15 @@ end
 local LARJKernel = {}
 
 -- Default parameter values
-KernelParams.annealSteps = 0
+KernelParams.annealIntervals = 0
+KernelParams.annealStepsPerInterval = 1
 KernelParams.jumpFreq = nil
 
-function LARJKernel:new(diffusionKernel, annealSteps, jumpFreq)
+function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval, jumpFreq)
 	local newobj = {
 		diffusionKernel = diffusionKernel,
-		annealSteps = annealSteps,
+		annealIntervals = annealIntervals,
+		annealStepsPerInterval = annealStepsPerInterval,
 		jumpFreq = jumpFreq,
 
 		currentNumStruct = 0,
@@ -506,7 +508,7 @@ function LARJKernel:jumpStep(currTrace)
 	-- doing more than zero annealing steps
 	local annealingLpRatio = 0
 	if table.getn(oldStructTrace:freeVarNames(false, true)) + table.getn(newStructTrace:freeVarNames(false, true)) ~= 0
-		and self.annealSteps > 0 then
+		and self.annealIntervals > 0 then
 		local lerpTrace = LARJInterpolationTrace:new(oldStructTrace, newStructTrace)
 		local hyperparams = HyperParamTable:new()
 		hyperparams:add(lerpTrace.alpha)
@@ -525,21 +527,22 @@ function LARJKernel:jumpStep(currTrace)
 		-- for DEBUG output
 		local accepts = {}
 
-		for aStep=0,self.annealSteps-1 do
-			local alpha = aStep/(self.annealSteps-1)
+		for aInterval=0,self.annealIntervals-1 do
+			local alpha = aInterval/(self.annealIntervals-1)
 			lerpTrace.alpha:setValue(alpha)
 			self.diffusionKernel:tellLARJStatus(alpha, oldVars, newVars)
-			annealingLpRatio = annealingLpRatio + lerpState.logprob
-
-			local pa = self.diffusionKernel.proposalsAccepted
-			lerpState = self.diffusionKernel:next(lerpState, hyperparams)
-			if self.diffusionKernel.proposalsAccepted ~= pa then
-				table.insert(accepts, true)
-			else
-				table.insert(accepts, false)
+			for aStep=1,self.annealStepsPerInterval do
+				annealingLpRatio = annealingLpRatio + lerpState.logprob
+				local pa = self.diffusionKernel.proposalsAccepted
+				lerpState = self.diffusionKernel:next(lerpState, hyperparams)
+				if self.diffusionKernel.proposalsAccepted ~= pa then
+					table.insert(accepts, true)
+				else
+					table.insert(accepts, false)
+				end
+				annealingLpRatio = annealingLpRatio - lerpState.logprob
 			end
 
-			annealingLpRatio = annealingLpRatio - lerpState.logprob
 		end
 
 		-- DEBUG output
@@ -565,7 +568,7 @@ function LARJKernel:jumpStep(currTrace)
 		self.diffusionKernel.annealing = false
 		--print("=== END ANNEALING ===")
 
-		self.annealingProposalsMade = self.annealingProposalsMade + self.annealSteps
+		self.annealingProposalsMade = self.annealingProposalsMade + self.annealIntervals*self.annealStepsPerInterval
 		self.annealingProposalsAccepted = self.annealingProposalsAccepted + self.diffusionKernel.proposalsAccepted - prevAccepted
 		oldStructTrace = lerpTrace.trace1
 		newStructTrace = lerpTrace.trace2
@@ -671,7 +674,8 @@ end
 local function LARJTraceMH(computation, params)
 	params = KernelParams:new(params)
 	return mcmc(computation,
-				LARJKernel:new(RandomWalkKernel:new(false, true), params.annealSteps, params.jumpFreq),
+				LARJKernel:new(RandomWalkKernel:new(false, true), params.annealIntervals,
+							   params.annealStepsPerInterval, params.jumpFreq),
 				params)
 end
 
@@ -682,7 +686,7 @@ local function LARJDriftMH(computation, params)
 	return mcmc(computation,
 				LARJKernel:new(
 					GaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth),
-					params.annealSteps, params.jumpFreq),
+					params.annealIntervals, params.annealStepsPerInterval, params.jumpFreq),
 				params)
 end
 

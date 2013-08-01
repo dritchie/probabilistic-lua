@@ -154,7 +154,8 @@ end
 
 --local numsamps = 100000
 local numsamps = 1000
-local numAnnealSteps = 100
+local annealIntervals = 10
+local annealSteps = 200
 local dots = 8
 local dims = {4, 5, 6, 7, 8}
 local fweight = 1.0
@@ -165,12 +166,12 @@ local t11 = os.clock()
 ---- GAUSSIAN DRIFT ----
 --res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
 --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
---res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, annealSteps=numAnnealSteps, jumpFreq=0.01, defaultBandwidth=0.25})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, annealIntervals=annealIntervals, annealStepsPerInterval=annealSteps, jumpFreq=0.01, defaultBandwidth=0.25})
 
 ---- HMC ----
 --res = MAP(makeFixedDimensionProgram(dots,fweight), HMC, {numsamps=numsamps, verbose=true})
 --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJHMC, {numsamps=numsamps, jumpFreq=0.01, verbose=true})
-res = MAP(makeTransdimensionalProgram(dims,fweight), LARJHMC, {numsamps=numsamps, annealSteps=numAnnealSteps, jumpFreq=0.01, verbose=true})
+res = MAP(makeTransdimensionalProgram(dims,fweight), LARJHMC, {numsamps=numsamps, annealIntervals=annealIntervals, annealStepsPerInterval=annealSteps, jumpFreq=0.01, verbose=true})
 local t12 = os.clock()
 
 
@@ -179,7 +180,7 @@ local t21 = os.clock()
 ---- GAUSSIAN DRIFT ----
 --res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
 --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
---res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps/numAnnealSteps, verbose=true, annealSteps=numAnnealSteps, defaultBandwidth=0.25})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH_JIT, {numsamps=numsamps, verbose=true, annealStepsPerInterval=annealIntervals, defaultBandwidth=0.25})
 
 ---- HMC ----
 --res = MAP(makeFixedDimensionProgram(dots,fweight), HMC_JIT, {numsamps=numsamps, verbose=true})
