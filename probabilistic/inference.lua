@@ -287,7 +287,7 @@ end
 
 function GaussianDriftKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
 	-- Default is to do nothing
-	-- We could make it less likely to propose a change certain variables based on alpha
+	-- We could make it less likely to propose to change certain variables based on alpha
 end
 
 
@@ -308,8 +308,8 @@ util.addReadonlyProperty(LARJInterpolationTrace, "returnValue",
 function LARJInterpolationTrace:new(trace1, trace2, alpha)
 	alpha = alpha or HyperParam:new("larjAnnealAlpha", 0)
 	local newobj = {
-		trace1 = trace1,
-		trace2 = trace2,
+		trace1 = trace1:deepcopy(),
+		trace2 = trace2:deepcopy(),
 		alpha = alpha,
 		-- These next two are expected by the random walk kernel
 		newlogprob = 0,
@@ -499,9 +499,7 @@ function LARJKernel:jumpStep(currTrace)
 	local newNumVars = table.getn(newStructTrace:freeVarNames(true, true))
 	fwdPropLP = fwdPropLP + newStructTrace.newlogprob - math.log(oldNumVars)
 
-	-- -- for DEBUG output
-	-- local lps = {}
-	-- local acceptRejects = {}
+	-- for DEBUG output
 	local newLpWithoutAnnealing = newStructTrace.logprob
 
 	-- We only actually do annealing if we have any non-structural variables and we're
@@ -514,48 +512,54 @@ function LARJKernel:jumpStep(currTrace)
 		hyperparams:add(lerpTrace.alpha)
 		local prevAccepted = self.diffusionKernel.proposalsAccepted
 
+		--print("=== BEGIN ANNEALING ===")
+		self.diffusionKernel.annealing = true
+
 		lerpTrace = self:releaseControl(lerpTrace)
 		local lerpState = self.diffusionKernel:assumeControl(lerpTrace)
 		self.isDiffusing = true
 
-		self.diffusionKernel.annealing = true
-		--print("BEGIN ANNEALING")
-
 		local oldVars = lerpTrace.trace1:varDiff(lerpTrace.trace2)
 		local newVars = lerpTrace.trace2:varDiff(lerpTrace.trace1)
 
+		-- for DEBUG output
+		local accepts = {}
+
 		for aStep=0,self.annealSteps-1 do
-			--local prevacc = self.diffusionKernel.proposalsAccepted -------
-			--local alpha = 1.0
 			local alpha = aStep/(self.annealSteps-1)
+			--local alpha = 1.0
 			lerpTrace.alpha:setValue(alpha)
 			self.diffusionKernel:tellLARJStatus(alpha, oldVars, newVars)
-			--table.insert(lps, lerpState.logprob) -------
 			annealingLpRatio = annealingLpRatio + lerpState.logprob
+
+			local pa = self.diffusionKernel.proposalsAccepted
 			lerpState = self.diffusionKernel:next(lerpState, hyperparams)
-			--table.insert(lps, lerpState.logprob) -------
+			if self.diffusionKernel.proposalsAccepted ~= pa then
+				table.insert(accepts, true)
+			else
+				table.insert(accepts, false)
+			end
+
 			annealingLpRatio = annealingLpRatio - lerpState.logprob
-			--table.insert(acceptRejects, self.diffusionKernel.proposalsAccepted ~= prevacc) -------
 		end
 
-		--print("END ANNEALING")
-		self.diffusionKernel.annealing = false
-
-		print("==================")
-		for i,n in ipairs(lerpState.trace1:freeVarNames(false, true)) do
-			print(lerpState.trace1:getRecord(n):getProp("val"), lerpState.trace1:getRecord(n):getProp("logprob"))
-		end
+		-- DEBUG output
+		print("=====================")
+		print(string.format("%d -> %d", #oldStructTrace:freeVarNames(false, true), #newStructTrace:freeVarNames(false, true)))
 		print("- - - - - - - - - ")
-		for i,n in ipairs(lerpState.trace2:freeVarNames(false, true)) do
-			print(lerpState.trace2:getRecord(n):getProp("val"), lerpState.trace2:getRecord(n):getProp("logprob"))
+		for i,v in ipairs(accepts) do
+			if v then print(i) end
 		end
-		print("- - - - - - - - - ")
-		for i,n in ipairs(lerpState:freeVarNames(false, true)) do
-			print(lerpState:getRecord(n):getProp("val"), lerpState:getRecord(n):getProp("logprob"))
-		end
+		-- print("- - - - - - - - - ")
+		-- for i,n in ipairs(lerpState:freeVarNames(false, true)) do
+		-- 	print(lerpState:getRecord(n):getProp("val"), lerpState:getRecord(n):getProp("logprob"))
+		-- end
 
 		lerpTrace = self.diffusionKernel:releaseControl(lerpState)
 		lerpTrace = self:assumeControl(lerpTrace)
+
+		self.diffusionKernel.annealing = false
+		--print("=== END ANNEALING ===")
 
 		self.annealingProposalsMade = self.annealingProposalsMade + self.annealSteps
 		self.annealingProposalsAccepted = self.annealingProposalsAccepted + self.diffusionKernel.proposalsAccepted - prevAccepted
@@ -584,27 +588,6 @@ function LARJKernel:jumpStep(currTrace)
 	print(string.format("lpDiffWithoutAnnealing: %g", newLpWithoutAnnealing - currTrace.logprob))
 	print(string.format("lpDiffWithAnnealing: %g", newStructTrace.logprob - currTrace.logprob))
 	print(string.format("diffAnnealingMade: %g", newStructTrace.logprob - newLpWithoutAnnealing))
-	--if accepted then
-		-- print("==========")
-		-- print("Old num nonstructs:", table.getn(oldStructTrace:freeVarNames(false, true)))
-		-- print("New num nonstructs:", table.getn(newStructTrace:freeVarNames(false, true)))
-		-- print("---annealing run---")
-		-- for i=0,table.getn(acceptRejects)-1 do
-		-- 	if acceptRejects[i+1] then
-		-- 		print(string.format("%g | %g (ACCEPT)", lps[2*i+1], lps[2*i+2]))
-		-- 	else
-		-- 		print(string.format("%g | %g (REJECT)", lps[2*i+1], lps[2*i+2]))
-		-- 	end
-		-- end
-		-- print("----------")
-		-- local totalaccepts = 0
-		-- for i,a in ipairs(acceptRejects) do
-		-- 	if a then totalaccepts = totalaccepts + 1 end
-		-- end
-		-- print(string.format("annealing accept ratio: %g", totalaccepts/self.annealSteps))
-		-- print(string.format("annealingLpRatio: %g", annealingLpRatio))
-		-- if accepted then print("ACCEPT") else print("REJECT") end
-	--end
 
 	if accepted then
 		self.jumpProposalsAccepted = self.jumpProposalsAccepted + 1

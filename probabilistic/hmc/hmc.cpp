@@ -116,6 +116,19 @@ extern "C"
 		s->sampler->set_inv_masses(imasses);
 	}
 
+	EXPORT void toggleStepSizeAdaptation(SamplerState* s, int flag)
+	{
+		if (flag)
+			s->sampler->adapt_on();
+		else
+			s->sampler->adapt_off();
+	}
+
+	EXPORT void recomputeLogProb(SamplerState* s)
+	{
+		s->sampler->recompute_log_prob();
+	}
+
 	EXPORT int nextSample(SamplerState* s, double* vals)
 	{
 		size_t numparams = s->model.num_params_r();
@@ -131,6 +144,11 @@ extern "C"
 				break;
 			}
 		}
+
+		// // DEBUG
+		// std::vector<double> params;
+		// s->sampler->get_sampler_params(params);
+		// printf("logprob: %g  |  step size: %g\n", samp.log_prob(), params[1]);
 
 		memcpy(vals, &newvals[0], numparams*sizeof(double));
 		return accepted;

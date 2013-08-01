@@ -35,22 +35,22 @@ local function circleOfDots(numDots, fweight)
 		table.insert(points, { x = gaussian({gmean, gsd}), y = gaussian({gmean, gsd}) })
 	end
 
-	-- -- distance between pairs factors
-	-- for i=0,numDots-1 do
-	-- 	local j = ((i+1) % numDots) + 1
-	-- 	local d = dist(points[i+1], points[j])
-	-- 	local f = random.gaussian_logprob(d, targetdist, distsd)
-	-- 	factor(fweight*f)
-	-- end
+	-- distance between pairs factors
+	for i=0,numDots-1 do
+		local j = ((i+1) % numDots) + 1
+		local d = dist(points[i+1], points[j])
+		local f = random.gaussian_logprob(d, targetdist, distsd)
+		factor(fweight*f)
+	end
 
-	-- -- angle between triples factors
-	-- for i=0,numDots-1 do
-	-- 	local j = ((i+1) % numDots)+1
-	-- 	local k = ((i+2) % numDots)+1
-	-- 	local dp = angDP(points[i+1], points[j], points[k])
-	-- 	local f = random.gaussian_logprob(dp, targetdp, dpsd)
-	-- 	factor(fweight*f)
-	-- end
+	-- angle between triples factors
+	for i=0,numDots-1 do
+		local j = ((i+1) % numDots)+1
+		local k = ((i+2) % numDots)+1
+		local dp = angDP(points[i+1], points[j], points[k])
+		local f = random.gaussian_logprob(dp, targetdp, dpsd)
+		factor(fweight*f)
+	end
 
 	return points
 end
@@ -155,7 +155,7 @@ end
 --local numsamps = 100000
 local numsamps = 1000
 local numAnnealSteps = 100
-local dots = 6
+local dots = 7
 local dims = {4, 5, 6, 7, 8}
 local fweight = 1.0
 
@@ -165,10 +165,10 @@ local t11 = os.clock()
 ---- GAUSSIAN DRIFT ----
 --res = MAP(makeFixedDimensionProgram(dots,fweight), driftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
 --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, defaultBandwidth=0.25})
---res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, annealSteps=numAnnealSteps, jumpFreq=0.02, defaultBandwidth=0.25})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, annealSteps=numAnnealSteps, jumpFreq=0.01, defaultBandwidth=0.25})
 
 ---- HMC ----
---res = MAP(makeFixedDimensionProgram(dots,fweight), HMC, {numsamps=numsamps, verbose=false})
+--res = MAP(makeFixedDimensionProgram(dots,fweight), HMC, {numsamps=numsamps, verbose=true})
 --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJHMC, {numsamps=numsamps, jumpFreq=0.01, verbose=true})
 res = MAP(makeTransdimensionalProgram(dims,fweight), LARJHMC, {numsamps=numsamps, annealSteps=numAnnealSteps, jumpFreq=0.01, verbose=true})
 local t12 = os.clock()

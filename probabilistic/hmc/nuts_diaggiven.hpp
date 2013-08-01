@@ -282,6 +282,11 @@ namespace stan {
         _inv_masses = std::vector<double>(num, 1.0);
       }
 
+      void recompute_log_prob()
+      {
+        this->_logp = this->_model.grad_log_prob(this->_x,this->_z,this->_g);
+      }
+
       /**
        * The core recursion in NUTS.
        *

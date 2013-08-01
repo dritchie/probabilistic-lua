@@ -596,6 +596,21 @@ end
 
 function HMCKernel:next(currState, hyperparams)
 
+	-- We need to do this, or else the sampler's "current logprob"
+	-- will be stale since it was calculated using the previous annealing alpha,
+	-- not the current one.
+	if self.annealing then
+		hmc.recomputeLogProb(self.sampler)
+	end
+
+	-- For some reason, adaptation during annealing drives the step
+	-- size toward a very small value. Turning it off for now.
+	if self.annealing then
+		hmc.toggleStepSizeAdaptation(self.sampler, 0)
+	else
+		hmc.toggleStepSizeAdaptation(self.sampler, 1)
+	end
+
 	self.currentTrace = currState:deepcopy()
 	local accepted = util.int2bool(hmc.nextSample(self.sampler, self.varVals))
 	self.proposalsMade = self.proposalsMade + 1
@@ -610,22 +625,6 @@ function HMCKernel:next(currState, hyperparams)
 	-- time the log prob function was called.
 	self.setNonStructValues(self.currentTrace, self.varVals)
 	self.currentTrace:flushLogProbs()
-
-	-- if self.annealing then
-	-- 	print("-----------------")
-	-- 	print("==== TRACE 1 ====")
-	-- 	for i,v in ipairs(self.currentTrace.trace1.varlist) do
-	-- 		print(v.val)
-	-- 	end
-	-- 	print("==== TRACE 2 ====")
-	-- 	for i,v in ipairs(self.currentTrace.trace2.varlist) do
-	-- 		print(v.val)
-	-- 	end
-	-- 	print("== LERP TRACE ==")
-	-- 	for i,n in ipairs(self.currentTrace:freeVarNames(true, true)) do
-	-- 		print(self.currentTrace:getRecord(n):getProp("val"))
-	-- 	end
-	-- end
 
 	return self.currentTrace
 end
@@ -658,7 +657,7 @@ function HMCKernel:stats()
 end
 
 function HMCKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
-	-- We need to adjust the step size of certain variables based on alpha.
+	-- We need to adjust the mass of certain variables based on alpha.
 	local oldVarSet = util.listToSet(oldVarNames)
 	local newVarSet = util.listToSet(newVarNames)
 	local invmasses = terralib.new(double[self.numVars], 1.0)
