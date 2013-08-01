@@ -155,7 +155,7 @@ end
 --local numsamps = 100000
 local numsamps = 1000
 local numAnnealSteps = 100
-local dots = 7
+local dots = 8
 local dims = {4, 5, 6, 7, 8}
 local fweight = 1.0
 

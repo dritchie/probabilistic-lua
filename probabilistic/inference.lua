@@ -546,9 +546,14 @@ function LARJKernel:jumpStep(currTrace)
 		print("=====================")
 		print(string.format("%d -> %d", #oldStructTrace:freeVarNames(false, true), #newStructTrace:freeVarNames(false, true)))
 		print("- - - - - - - - - ")
+		-- for i,v in ipairs(accepts) do
+		-- 	if v then print(i) end
+		-- end
+		local numAccepts = 0
 		for i,v in ipairs(accepts) do
-			if v then print(i) end
+			if v then numAccepts = numAccepts + 1 end
 		end
+		print(string.format("%g%%\n", numAccepts/#accepts * 100))
 		-- print("- - - - - - - - - ")
 		-- for i,n in ipairs(lerpState:freeVarNames(false, true)) do
 		-- 	print(lerpState:getRecord(n):getProp("val"), lerpState:getRecord(n):getProp("logprob"))

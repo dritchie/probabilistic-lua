@@ -24,33 +24,6 @@ namespace stan {
 
   namespace mcmc {
 
-    /* Alternate version of function in util.hpp */
-    // Returns the new log probability of x and m
-    // Catches domain errors and sets logp as -inf.
-    // Uses a diagonal mass matrix
-    double diag_leapfrog(stan::model::prob_grad& model, 
-                         std::vector<int> z, 
-                         const std::vector<double>& inv_masses,
-                         std::vector<double>& x, std::vector<double>& m,
-                         std::vector<double>& g, double epsilon,
-                         std::ostream* error_msgs = 0,
-                         std::ostream* output_msgs = 0) {
-      for (size_t i = 0; i < m.size(); i++)
-        m[i] += 0.5 * epsilon * g[i];
-      for (size_t i = 0; i < x.size(); i++)
-        x[i] += epsilon * inv_masses[i] * m[i];
-      double logp;
-      try {
-        logp = model.grad_log_prob(x, z, g, output_msgs);
-      } catch (std::domain_error e) {
-        write_error_msgs(error_msgs,e);
-        logp = -std::numeric_limits<double>::infinity();
-      }
-      for (size_t i = 0; i < m.size(); i++)
-        m[i] += 0.5 * epsilon * g[i];
-      return logp;
-    }
-
     /**
      * No-U-Turn Sampler (NUTS) with given diagonal mass matrix.
      *
@@ -89,6 +62,33 @@ namespace stan {
         stan::math::sub(xplus, xminus, total_direction);
         return stan::math::dot(total_direction, mminus) > 0
             && stan::math::dot(total_direction, mplus) > 0;
+      }
+
+      /* Alternate version of function in util.hpp */
+      // Returns the new log probability of x and m
+      // Catches domain errors and sets logp as -inf.
+      // Uses a diagonal mass matrix
+      static double diag_leapfrog(stan::model::prob_grad& model, 
+                           std::vector<int> z, 
+                           const std::vector<double>& inv_masses,
+                           std::vector<double>& x, std::vector<double>& m,
+                           std::vector<double>& g, double epsilon,
+                           std::ostream* error_msgs = 0,
+                           std::ostream* output_msgs = 0) {
+        for (size_t i = 0; i < m.size(); i++)
+          m[i] += 0.5 * epsilon * g[i];
+        for (size_t i = 0; i < x.size(); i++)
+          x[i] += epsilon * inv_masses[i] * m[i];
+        double logp;
+        try {
+          logp = model.grad_log_prob(x, z, g, output_msgs);
+        } catch (std::domain_error e) {
+          write_error_msgs(error_msgs,e);
+          logp = -std::numeric_limits<double>::infinity();
+        }
+        for (size_t i = 0; i < m.size(); i++)
+          m[i] += 0.5 * epsilon * g[i];
+        return logp;
       }
 
     public:

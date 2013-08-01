@@ -4,7 +4,9 @@ This file implements the HMC sampling library and is compiled into a shared libr
 
 #include "stan/agrad/agrad.hpp"
 #include "stan/model/prob_grad_ad.hpp"
-#include "nuts_diaggiven.hpp"
+//#include "nuts_diaggiven.hpp"
+#include "lmc.hpp"
+//#include "stan/mcmc/adaptive_hmc.hpp"
 
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
@@ -41,7 +43,6 @@ public:
 	{
 		num* params = (num*)(&params_r[0]);
 		num lp = lpfn(params);
-		//return stan::agrad::var((stan::agrad::vari*)lp.impl);
 		return *((stan::agrad::var*)&lp);
 	}
 	virtual double grad_log_prob(std::vector<double>& params_r, 
@@ -67,8 +68,14 @@ struct SamplerState
 {
 public:
 	FunctionPoinderModel model;
-	stan::mcmc::nuts_diaggiven<boost::mt19937>* sampler;
+	//stan::mcmc::nuts_diaggiven<boost::mt19937>* sampler;
+	stan::mcmc::lmc<boost::mt19937>* sampler;
+	//stan::mcmc::adaptive_hmc<boost::mt19937>* sampler;
 	SamplerState() : model(), sampler(NULL) {}
+	~SamplerState()
+	{
+		if (sampler) delete sampler;
+	}
 }; 
 
 // The C interface
@@ -76,7 +83,6 @@ extern "C"
 {
 	EXPORT double getValue(num n)
 	{
-		//return stan::agrad::var((stan::agrad::vari*)n.impl).val();
 		return ((stan::agrad::var*)&n)->val();
 	}
 
@@ -117,11 +123,6 @@ extern "C"
 			}
 		}
 
-		// // DEBUG
-		// std::vector<double> params;
-		// s->sampler->get_sampler_params(params);
-		// printf("logprob: %g  |  step size: %g\n", samp.log_prob(), params[1]);
-
 		memcpy(vals, &newvals[0], numparams*sizeof(double));
 		return accepted;
 	}
@@ -142,7 +143,9 @@ extern "C"
 		if (s->sampler == NULL)
 		{
 			std::vector<int> params_i;
-			s->sampler = new stan::mcmc::nuts_diaggiven<>(s->model, params_r, params_i);
+			//s->sampler = new stan::mcmc::nuts_diaggiven<>(s->model, params_r, params_i);
+			s->sampler = new stan::mcmc::lmc<>(s->model, params_r, params_i);
+			//s->sampler = new stan::mcmc::adaptive_hmc<>(s->model, params_r, params_i, 1);
 		}
 		else
 		{

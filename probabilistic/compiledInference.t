@@ -603,13 +603,13 @@ function HMCKernel:next(currState, hyperparams)
 		hmc.recomputeLogProb(self.sampler)
 	end
 
-	-- For some reason, adaptation during annealing drives the step
-	-- size toward a very small value. Turning it off for now.
-	if self.annealing then
-		hmc.toggleStepSizeAdaptation(self.sampler, 0)
-	else
-		hmc.toggleStepSizeAdaptation(self.sampler, 1)
-	end
+	-- -- For some reason, adaptation during annealing drives the step
+	-- -- size toward a very small value. Turning it off for now.
+	-- if self.annealing then
+	-- 	hmc.toggleStepSizeAdaptation(self.sampler, 0)
+	-- else
+	-- 	hmc.toggleStepSizeAdaptation(self.sampler, 1)
+	-- end
 
 	self.currentTrace = currState:deepcopy()
 	local accepted = util.int2bool(hmc.nextSample(self.sampler, self.varVals))
