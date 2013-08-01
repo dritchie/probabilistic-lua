@@ -25,6 +25,7 @@ int nextSample(struct SamplerState* s, double* vals);
 void setVariableValues(struct SamplerState* s, int numvals, double* vals);
 void setVariableInvMasses(struct SamplerState* s, double* invmasses);
 void toggleStepSizeAdaptation(struct SamplerState* s, int flag);
+void togglePrintGradients(struct SamplerState* s, int flag);
 void recomputeLogProb(struct SamplerState* s);
 
 // C interfaces to dual number arithmetic

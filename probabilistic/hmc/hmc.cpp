@@ -32,7 +32,8 @@ class FunctionPoinderModel : public stan::model::prob_grad_ad
 {
 public:
 	LogProbFunction lpfn;
-	FunctionPoinderModel() : stan::model::prob_grad_ad(0), lpfn(NULL) {}
+	bool printGradients;
+	FunctionPoinderModel() : stan::model::prob_grad_ad(0), lpfn(NULL), printGradients(false) {}
 	void setLogprobFunction(LogProbFunction lp) { lpfn = lp; }
 	virtual stan::agrad::var log_prob(std::vector<stan::agrad::var>& params_r, 
 			                  std::vector<int>& params_i,
@@ -42,6 +43,22 @@ public:
 		num lp = lpfn(params);
 		//return stan::agrad::var((stan::agrad::vari*)lp.impl);
 		return *((stan::agrad::var*)&lp);
+	}
+	virtual double grad_log_prob(std::vector<double>& params_r, 
+                                   std::vector<int>& params_i, 
+                                   std::vector<double>& gradient,
+                                   std::ostream* output_stream = 0)
+	{
+		double retval = stan::model::prob_grad_ad::grad_log_prob(params_r, params_i, gradient, output_stream);
+		if (printGradients)
+		{
+			printf("=== GRADIENT ===\n");
+			for (size_t i = 0; i < gradient.size(); i++)
+			{
+				printf("%g\n", gradient[i]);
+			}
+		}
+		return retval;
 	}
 };
 
@@ -84,6 +101,31 @@ extern "C"
 		s->model.setLogprobFunction(lpfn);
 	}
 
+	EXPORT int nextSample(SamplerState* s, double* vals)
+	{
+		size_t numparams = s->model.num_params_r();
+
+		stan::mcmc::sample samp = s->sampler->next();
+		const std::vector<double>& newvals = samp.params_r();
+		bool accepted = false;
+		for (unsigned int i = 0; i < numparams; i++)
+		{
+			if (newvals[i] != vals[i])
+			{
+				accepted = true;
+				break;
+			}
+		}
+
+		// // DEBUG
+		// std::vector<double> params;
+		// s->sampler->get_sampler_params(params);
+		// printf("logprob: %g  |  step size: %g\n", samp.log_prob(), params[1]);
+
+		memcpy(vals, &newvals[0], numparams*sizeof(double));
+		return accepted;
+	}
+
 	EXPORT void setVariableValues(SamplerState* s, int numvals, double* vals)
 	{
 		if (s->model.lpfn == NULL)
@@ -124,34 +166,14 @@ extern "C"
 			s->sampler->adapt_off();
 	}
 
+	EXPORT void togglePrintGradients(SamplerState* s, int flag)
+	{
+		s->model.printGradients = (bool)flag;
+	}
+
 	EXPORT void recomputeLogProb(SamplerState* s)
 	{
 		s->sampler->recompute_log_prob();
-	}
-
-	EXPORT int nextSample(SamplerState* s, double* vals)
-	{
-		size_t numparams = s->model.num_params_r();
-
-		stan::mcmc::sample samp = s->sampler->next();
-		const std::vector<double>& newvals = samp.params_r();
-		bool accepted = false;
-		for (unsigned int i = 0; i < numparams; i++)
-		{
-			if (newvals[i] != vals[i])
-			{
-				accepted = true;
-				break;
-			}
-		}
-
-		// // DEBUG
-		// std::vector<double> params;
-		// s->sampler->get_sampler_params(params);
-		// printf("logprob: %g  |  step size: %g\n", samp.log_prob(), params[1]);
-
-		memcpy(vals, &newvals[0], numparams*sizeof(double));
-		return accepted;
 	}
 
 	// The AD arithmetic functions

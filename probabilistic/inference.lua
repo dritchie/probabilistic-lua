@@ -527,7 +527,6 @@ function LARJKernel:jumpStep(currTrace)
 
 		for aStep=0,self.annealSteps-1 do
 			local alpha = aStep/(self.annealSteps-1)
-			--local alpha = 1.0
 			lerpTrace.alpha:setValue(alpha)
 			self.diffusionKernel:tellLARJStatus(alpha, oldVars, newVars)
 			annealingLpRatio = annealingLpRatio + lerpState.logprob

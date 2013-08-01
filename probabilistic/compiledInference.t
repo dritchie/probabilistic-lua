@@ -671,6 +671,13 @@ function HMCKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
 		end
 	end
 	hmc.setVariableInvMasses(self.sampler, invmasses)
+
+	-- -- DEBUG: print gradients
+	-- if #newVarNames > 0 then
+	-- 	hmc.togglePrintGradients(self.sampler, 1)
+	-- else
+	-- 	hmc.togglePrintGradients(self.sampler, 0)
+	-- end
 end
 
 
