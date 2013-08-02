@@ -432,15 +432,15 @@ local LARJKernel = {}
 -- Default parameter values
 KernelParams.annealIntervals = 0
 KernelParams.annealStepsPerInterval = 1
-KernelParams.minGlobalTemp = 1.0
+KernelParams.globalTempMult = 1.0
 KernelParams.jumpFreq = nil
 
-function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval, minGlobalTemp, jumpFreq)
+function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval, globalTempMult, jumpFreq)
 	local newobj = {
 		diffusionKernel = diffusionKernel,
 		annealIntervals = annealIntervals,
 		annealStepsPerInterval = annealStepsPerInterval,
-		minGlobalTemp = minGlobalTemp,
+		globalTempMult = globalTempMult,
 		jumpFreq = jumpFreq,
 
 		currentNumStruct = 0,
@@ -553,13 +553,14 @@ function LARJKernel:jumpStep(currTrace)
 		-- for DEBUG output
 		local accepts = {}
 
+		local globalTemp = 1.0
 		for aInterval=0,self.annealIntervals-1 do
 			local alpha = aInterval/(self.annealIntervals-1)
-			--local tempInterp = -math.abs(2*alpha-1)+1
-			--local tempInterp = -(2*alpha-1)*(2*alpha-1)+1
-			--local tempInterp = -(2*alpha-1)*(2*alpha-1)*(2*alpha-1)*(2*alpha-1)+1
-			local tempInterp = -(2*alpha-1)*(2*alpha-1)*(2*alpha-1)*(2*alpha-1)*(2*alpha-1)*(2*alpha-1)+1
-			local globalTemp = (1-tempInterp) + tempInterp*self.minGlobalTemp
+			if alpha <= 0.5 then
+				globalTemp = globalTemp * self.globalTempMult
+			else
+				globalTemp = globalTemp / self.globalTempMult
+			end
 			lerpTrace.alpha:setValue(alpha)
 			lerpTrace.globalTemp:setValue(globalTemp)
 			self.diffusionKernel:tellLARJStatus(alpha, oldVars, newVars)
@@ -707,7 +708,7 @@ local function LARJTraceMH(computation, params)
 	params = KernelParams:new(params)
 	return mcmc(computation,
 				LARJKernel:new(RandomWalkKernel:new(false, true), params.annealIntervals,
-							   params.annealStepsPerInterval, params.minGlobalTemp, params.jumpFreq),
+							   params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
 				params)
 end
 
@@ -718,7 +719,7 @@ local function LARJDriftMH(computation, params)
 	return mcmc(computation,
 				LARJKernel:new(
 					GaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth),
-					params.annealIntervals, params.annealStepsPerInterval, params.minGlobalTemp, params.jumpFreq),
+					params.annealIntervals, params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
 				params)
 end
 

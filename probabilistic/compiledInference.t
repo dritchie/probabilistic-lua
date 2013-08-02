@@ -700,7 +700,7 @@ local function LARJDriftMH_JIT(computation, params)
 	return inf.mcmc(computation,
 					inf.LARJKernel:new(
 						CompiledGaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth, params.cacheSize),
-						params.annealIntervals, params.annealStepsPerInterval, params.minGlobalTemp, params.jumpFreq),
+						params.annealIntervals, params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
 					params)
 end
 
@@ -720,7 +720,7 @@ local function LARJHMC_JIT(computation, params)
 	return inf.mcmc(computation,
 					inf.LARJKernel:new(
 						CompiledHMCKernel:new(params.cacheSize),
-						params.annealIntervals, params.annealStepsPerInterval, params.minGlobalTemp, params.jumpFreq),
+						params.annealIntervals, params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
 					params)
 end
 
@@ -736,7 +736,7 @@ local function LARJHMC(computation, params)
 	return inf.mcmc(computation,
 					inf.LARJKernel:new(
 						HMCKernel:new(),
-						params.annealIntervals, params.annealStepsPerInterval, params.minGlobalTemp, params.jumpFreq),
+						params.annealIntervals, params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
 					params)
 end
 
