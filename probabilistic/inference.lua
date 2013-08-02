@@ -298,19 +298,22 @@ local LARJInterpolationTrace = {}
 util.addReadonlyProperty(LARJInterpolationTrace, "logprob",
 	function(self)
 		local a = self.alpha:getValue()
-		return (1-a)*self.trace1.logprob + a*self.trace2.logprob
+		local t = self.globalTemp:getValue()
+		return t*((1-a)*self.trace1.logprob + a*self.trace2.logprob)
 	end)
 util.addReadonlyProperty(LARJInterpolationTrace, "conditionsSatisfied",
 	function(self) return self.trace1.conditionsSatisfied and self.trace2.conditionsSatisfied end)
 util.addReadonlyProperty(LARJInterpolationTrace, "returnValue",
 	function(self) return trace2.returnValue end)
 
-function LARJInterpolationTrace:new(trace1, trace2, alpha)
+function LARJInterpolationTrace:new(trace1, trace2, alpha, globalTemp)
 	alpha = alpha or HyperParam:new("larjAnnealAlpha", 0)
+	globalTemp = globalTemp or HyperParam:new("larjAnnealGlobalTemp", 1)
 	local newobj = {
 		trace1 = trace1:deepcopy(),
 		trace2 = trace2:deepcopy(),
 		alpha = alpha,
+		globalTemp = globalTemp,
 		-- These next two are expected by the random walk kernel
 		newlogprob = 0,
 		oldlogprob = 0
@@ -377,7 +380,7 @@ function LARJInterpolationTrace:getRecord(name)
 end
 
 function LARJInterpolationTrace:deepcopy()
-	return LARJInterpolationTrace:new(self.trace1:deepcopy(), self.trace2:deepcopy(), self.alpha)
+	return LARJInterpolationTrace:new(self.trace1:deepcopy(), self.trace2:deepcopy(), self.alpha, self.globalTemp)
 end
 
 function LARJInterpolationTrace:structuralSignatures()
@@ -408,13 +411,15 @@ local LARJKernel = {}
 -- Default parameter values
 KernelParams.annealIntervals = 0
 KernelParams.annealStepsPerInterval = 1
+KernelParams.minGlobalTemp = 1.0
 KernelParams.jumpFreq = nil
 
-function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval, jumpFreq)
+function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval, minGlobalTemp, jumpFreq)
 	local newobj = {
 		diffusionKernel = diffusionKernel,
 		annealIntervals = annealIntervals,
 		annealStepsPerInterval = annealStepsPerInterval,
+		minGlobalTemp = minGlobalTemp,
 		jumpFreq = jumpFreq,
 
 		currentNumStruct = 0,
@@ -529,7 +534,13 @@ function LARJKernel:jumpStep(currTrace)
 
 		for aInterval=0,self.annealIntervals-1 do
 			local alpha = aInterval/(self.annealIntervals-1)
+			--local tempInterp = -math.abs(2*alpha-1)+1
+			--local tempInterp = -(2*alpha-1)*(2*alpha-1)+1
+			--local tempInterp = -(2*alpha-1)*(2*alpha-1)*(2*alpha-1)*(2*alpha-1)+1
+			local tempInterp = -(2*alpha-1)*(2*alpha-1)*(2*alpha-1)*(2*alpha-1)*(2*alpha-1)*(2*alpha-1)+1
+			local globalTemp = (1-tempInterp) + tempInterp*self.minGlobalTemp
 			lerpTrace.alpha:setValue(alpha)
+			lerpTrace.globalTemp:setValue(globalTemp)
 			self.diffusionKernel:tellLARJStatus(alpha, oldVars, newVars)
 			for aStep=1,self.annealStepsPerInterval do
 				annealingLpRatio = annealingLpRatio + lerpState.logprob
@@ -675,7 +686,7 @@ local function LARJTraceMH(computation, params)
 	params = KernelParams:new(params)
 	return mcmc(computation,
 				LARJKernel:new(RandomWalkKernel:new(false, true), params.annealIntervals,
-							   params.annealStepsPerInterval, params.jumpFreq),
+							   params.annealStepsPerInterval, params.minGlobalTemp, params.jumpFreq),
 				params)
 end
 
@@ -686,7 +697,7 @@ local function LARJDriftMH(computation, params)
 	return mcmc(computation,
 				LARJKernel:new(
 					GaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth),
-					params.annealIntervals, params.annealStepsPerInterval, params.jumpFreq),
+					params.annealIntervals, params.annealStepsPerInterval, params.minGlobalTemp, params.jumpFreq),
 				params)
 end
 
