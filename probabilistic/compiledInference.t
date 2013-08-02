@@ -626,6 +626,8 @@ function HMCKernel:next(currState, hyperparams)
 	self.setNonStructValues(self.currentTrace, self.varVals)
 	self.currentTrace:flushLogProbs()
 
+	--print(self.currentTrace.logprob)
+
 	return self.currentTrace
 end
 

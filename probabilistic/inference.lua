@@ -242,6 +242,11 @@ function GaussianDriftKernel:new(bandwidthMap, defaultBandwidth)
 end
 
 function GaussianDriftKernel:assumeControl(currTrace)
+	self.nonStructNames = currTrace:freeVarNames(false, true)
+	self.varChoiceProbs = {}
+	for i=1,#self.nonStructNames do
+		self.varChoiceProbs[i] = 1.0
+	end
 	return currTrace
 end
 
@@ -252,17 +257,20 @@ end
 function GaussianDriftKernel:next(currTrace)
 	self.proposalsMade = self.proposalsMade + 1
 	local newTrace = currTrace:deepcopy()
-	local name = util.randomChoice(newTrace:freeVarNames(false, true))
 
 	-- If we have no free random variables, then just run the computation
 	-- and generate another sample (this may not actually be deterministic,
 	-- in the case of nested query)
-	if not name then
+	if #self.nonStructNames == 0 then
 		newTrace:traceUpdate(true)
 		return newTrace
-	-- Otherwise, make a proposal for a randomly-chosen variable, probabilistically
-	-- accept it
+	-- Otherwise, make a proposal for a randomly-chosen variable, probabilistically accept it
 	else
+		-- Choose a variable to perturb based on a vector of per-variable
+		-- probabilities.
+		local varIndex = random.multinomial_sample(unpack(self.varChoiceProbs))
+		local name = self.nonStructNames[varIndex]
+
 		local rec = newTrace:getRecord(name)
 		local ann = rec:getProp("annotation")
 		local v = rec:getProp("val")
@@ -286,8 +294,19 @@ function GaussianDriftKernel:stats()
 end
 
 function GaussianDriftKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
-	-- Default is to do nothing
-	-- We could make it less likely to propose to change certain variables based on alpha
+	-- Make it less likely to propose to change certain variables based on alpha
+	local oldVarSet = util.listToSet(oldVarNames)
+	local newVarSet = util.listToSet(newVarNames)
+	local oldScale = (1.0-alpha)
+	local newScale = alpha
+	for i,n in ipairs(self.nonStructNames) do
+		if oldVarSet[n] then
+			self.varChoiceProbs[i] = oldScale
+		elseif newVarSet[n] then
+			self.varChoiceProbs[i] = newScale
+		end
+	end
+	util.normalize(self.varChoiceProbs)
 end
 
 

@@ -63,6 +63,16 @@ function M.sumtable(tab)
 	return s
 end
 
+function M.normalize(arr)
+	local total = 0
+	for i,v in ipairs(arr) do
+		total = total + v
+	end
+	for i,v in ipairs(arr) do
+		arr[i] = v / total
+	end
+end
+
 function M.arrayequals(a1, a2)
 	if table.getn(a1) ~= table.getn(a2) then
 		return false
