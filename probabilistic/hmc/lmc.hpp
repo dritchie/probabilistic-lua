@@ -32,6 +32,12 @@ namespace stan
 			// Vector of per-parameter inverse masses.
       		std::vector<double> _inv_masses;
 
+      		// Persistent momentums.
+      		std::vector<double> _m;
+
+      		// Parameter controlling partial momentum update
+      		double _alpha;
+
 			/* Alternate version of function in util.hpp */
 			// Returns the new log probability of x and m
 			// Catches domain errors and sets logp as -inf.
@@ -65,6 +71,7 @@ namespace stan
 			lmc(stan::model::prob_grad& model,
 				const std::vector<double>& params_r,
 				const std::vector<int>& params_i,
+				double alpha = 0.0,		// Partial momentum refreshment
 				double epsilon = -1,
 				double epsilon_pm = 0.0,
 				bool epsilon_adapt = true,
@@ -82,7 +89,8 @@ namespace stan
 								delta,
 								gamma,
 								base_rng),
-			_inv_masses(model.num_params_r(), 1.0)
+			_inv_masses(model.num_params_r(), 1.0),
+			_alpha(alpha)
 			{
 				this->adaptation_init(10.0);
 			}
@@ -93,37 +101,58 @@ namespace stan
 			{
 				this->_epsilon_last = this->_epsilon;
 
-				// TODO: Partial momentum refreshment?
-				std::vector<double> momentum(this->_model.num_params_r());
-				for (size_t i = 0; i < momentum.size(); ++i)
-					momentum[i] = this->_rand_unit_norm() * this->_inv_masses[i];
+				// Update momentum.
+				// If dim of current _m vector doesn't match dimension of the model,
+				// then we resample from scratch
+				if (_m.size() != this->_model.num_params_r())
+				{
+					_m.resize(this->_model.num_params_r());
+					for (size_t i = 0; i < _m.size(); ++i)
+						_m[i] = this->_rand_unit_norm() * this->_inv_masses[i];
+				}
+				// Otherwise, we do a partial momentum update
+				else
+				{
+					double coeff = sqrt(1-_alpha*_alpha);
+					for (size_t i = 0; i < _m.size(); ++i)
+						_m[i] = _alpha*_m[i] + coeff*this->_rand_unit_norm()*this->_inv_masses[i];
+				}
 
 				// Initial Hamiltonian
 				double H = 0.0;
-				for (size_t i = 0; i < momentum.size(); i++)
-					H += momentum[i]*momentum[i] / _inv_masses[i];
+				for (size_t i = 0; i < _m.size(); i++)
+					H += _m[i]*_m[i] / _inv_masses[i];
 				H = H / 2.0 - this->_logp;
 
-				// Leapfrog step
+				// Leapfrog step, then negate momentum
 				std::vector<double> x_new(this->_x);
-				std::vector<double> g_new = (this->_g);
-				double newlogp = diag_leapfrog(this->_model, this->_z, _inv_masses, x_new, momentum, g_new, this->_epsilon_last,
+				std::vector<double> g_new(this->_g);
+				std::vector<double> m_new(this->_m);
+				double newlogp = diag_leapfrog(this->_model, this->_z, _inv_masses, x_new, m_new, g_new, this->_epsilon_last,
 											   this->_error_msgs, this->_output_msgs);
+				for (size_t i = 0; i < m_new.size(); i++)
+					m_new[i] = -m_new[i];
 				this->nfevals_plus_eq(1);
 
 				// New Hamiltonian
 				double H_new = 0.0;
-				for (size_t i = 0; i < momentum.size(); i++)
-					H_new += momentum[i]*momentum[i] / _inv_masses[i];
+				for (size_t i = 0; i < m_new.size(); i++)
+					H_new += m_new[i]*m_new[i] / _inv_masses[i];
 				H_new = H_new / 2.0 - newlogp;
 
+				// Accept/reject test
 				double acceptThresh = exp(-H_new + H);
 				if (this->_rand_uniform_01() < acceptThresh)
 				{
 					this->_x = x_new;
 					this->_g = g_new;
+					this->_m = m_new;
 					this->_logp = newlogp;
 				}
+
+				// Negate momentum
+				for (size_t i = 0; i < _m.size(); i++)
+					_m[i] = -_m[i];
 
 				// Adaptation
 				double adapt_stat = stan::math::min(1, acceptThresh);

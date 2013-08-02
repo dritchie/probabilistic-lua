@@ -144,7 +144,7 @@ extern "C"
 		{
 			std::vector<int> params_i;
 			//s->sampler = new stan::mcmc::nuts_diaggiven<>(s->model, params_r, params_i);
-			s->sampler = new stan::mcmc::lmc<>(s->model, params_r, params_i);
+			s->sampler = new stan::mcmc::lmc<>(s->model, params_r, params_i, 0.5);	// Last param is partial momentum refreshment
 			//s->sampler = new stan::mcmc::adaptive_hmc<>(s->model, params_r, params_i, 1);
 		}
 		else

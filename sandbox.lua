@@ -170,8 +170,8 @@ end
 -------
 
 --local numsamps = 100000
-local numsamps = 1000
-local annealIntervals = 2000
+local numsamps = 5000
+local annealIntervals = 1000
 local annealSteps = 1
 local minGlobalTemp = 0.1
 local dots = 4
