@@ -603,8 +603,7 @@ function HMCKernel:next(currState, hyperparams)
 		hmc.recomputeLogProb(self.sampler)
 	end
 
-	-- -- For some reason, adaptation during annealing drives the step
-	-- -- size toward a very small value. Turning it off for now.
+	-- -- Should we leave adaptation on during annealing? Not sure...
 	-- if self.annealing then
 	-- 	hmc.toggleStepSizeAdaptation(self.sampler, 0)
 	-- else

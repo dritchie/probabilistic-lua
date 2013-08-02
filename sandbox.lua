@@ -171,8 +171,8 @@ end
 
 --local numsamps = 100000
 local numsamps = 1000
-local annealIntervals = 100
-local annealSteps = 20
+local annealIntervals = 2000
+local annealSteps = 1
 local minGlobalTemp = 0.1
 local dots = 4
 local dims = {4, 5, 6, 7, 8}

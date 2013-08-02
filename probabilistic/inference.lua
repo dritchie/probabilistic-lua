@@ -304,6 +304,8 @@ function GaussianDriftKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
 			self.varChoiceProbs[i] = oldScale
 		elseif newVarSet[n] then
 			self.varChoiceProbs[i] = newScale
+		else
+			self.varChoiceProbs[i] = 1.0
 		end
 	end
 	util.normalize(self.varChoiceProbs)
