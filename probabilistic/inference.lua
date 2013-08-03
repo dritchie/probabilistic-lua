@@ -523,8 +523,8 @@ function LARJKernel:jumpStep(currTrace)
 	var.val = propval
 	var.logprob = var.erp:logprob(var.val, var.params)
 	newStructTrace:traceUpdate()
-	local oldNumVars = table.getn(oldStructTrace:freeVarNames(true, true))
-	local newNumVars = table.getn(newStructTrace:freeVarNames(true, true))
+	local oldNumVars = table.getn(oldStructTrace:freeVarNames(true, false))
+	local newNumVars = table.getn(newStructTrace:freeVarNames(true, false))
 	fwdPropLP = fwdPropLP + newStructTrace.newlogprob - math.log(oldNumVars)
 
 	-- for DEBUG output
