@@ -50,16 +50,7 @@ public:
                                    std::vector<double>& gradient,
                                    std::ostream* output_stream = 0)
 	{
-		double retval = stan::model::prob_grad_ad::grad_log_prob(params_r, params_i, gradient, output_stream);
-		if (printGradients)
-		{
-			printf("=== GRADIENT ===\n");
-			for (size_t i = 0; i < gradient.size(); i++)
-			{
-				printf("%g\n", gradient[i]);
-			}
-		}
-		return retval;
+		return stan::model::prob_grad_ad::grad_log_prob(params_r, params_i, gradient, output_stream);
 	}
 };
 
@@ -159,19 +150,6 @@ extern "C"
 		std::vector<double> imasses(s->model.num_params_r());
 		memcpy(&imasses[0], invmasses, s->model.num_params_r()*sizeof(double));
 		s->sampler->set_inv_masses(imasses);
-	}
-
-	EXPORT void toggleStepSizeAdaptation(SamplerState* s, int flag)
-	{
-		if (flag)
-			s->sampler->adapt_on();
-		else
-			s->sampler->adapt_off();
-	}
-
-	EXPORT void togglePrintGradients(SamplerState* s, int flag)
-	{
-		s->model.printGradients = (bool)flag;
 	}
 
 	EXPORT void recomputeLogProb(SamplerState* s)

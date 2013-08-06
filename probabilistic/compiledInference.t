@@ -603,13 +603,6 @@ function HMCKernel:next(currState, hyperparams)
 		hmc.recomputeLogProb(self.sampler)
 	end
 
-	-- -- Should we leave adaptation on during annealing? Not sure...
-	-- if self.annealing then
-	-- 	hmc.toggleStepSizeAdaptation(self.sampler, 0)
-	-- else
-	-- 	hmc.toggleStepSizeAdaptation(self.sampler, 1)
-	-- end
-
 	self.currentTrace = currState:deepcopy()
 	local accepted = util.int2bool(hmc.nextSample(self.sampler, self.varVals))
 	self.proposalsMade = self.proposalsMade + 1
@@ -672,13 +665,6 @@ function HMCKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
 		end
 	end
 	hmc.setVariableInvMasses(self.sampler, invmasses)
-
-	-- -- DEBUG: print gradients
-	-- if #newVarNames > 0 then
-	-- 	hmc.togglePrintGradients(self.sampler, 1)
-	-- else
-	-- 	hmc.togglePrintGradients(self.sampler, 0)
-	-- end
 end
 
 

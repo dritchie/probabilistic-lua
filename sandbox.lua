@@ -169,7 +169,6 @@ end
 
 -------
 
---local numsamps = 100000
 local numsamps = 5000
 local annealIntervals = 100
 local annealSteps = 1
