@@ -552,7 +552,7 @@ function HMCKernel:new()
 	{
 		proposalsMade = 0,
 		proposalsAccepted = 0,
-		sampler = hmc.newSampler()
+		sampler = hmc.newSampler(0)		-- 0 for Langevin, 1 for NUTS
 	}
 	ffi.gc(newobj.sampler, function(self) hmc.deleteSampler(self) end)
 

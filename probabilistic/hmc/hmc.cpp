@@ -4,9 +4,8 @@ This file implements the HMC sampling library and is compiled into a shared libr
 
 #include "stan/agrad/agrad.hpp"
 #include "stan/model/prob_grad_ad.hpp"
-//#include "nuts_diaggiven.hpp"
+#include "nuts_diaggiven.hpp"
 #include "lmc.hpp"
-//#include "stan/mcmc/adaptive_hmc.hpp"
 
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
@@ -28,14 +27,25 @@ extern "C"
 	typedef num(*LogProbFunction)(num*);
 }
 
+extern "C"
+{
+	// The AD arithmetic functions
+	#include "adMath.cpp"
+}
+
+
+///////////////////////////////////////////////////////////////////////
+//							HMC Samplers 							 //
+///////////////////////////////////////////////////////////////////////
+
+
 // A custom subclass of prob_grad_ad that evaluates log probabilities via
 // a function pointer.
 class FunctionPoinderModel : public stan::model::prob_grad_ad
 {
 public:
 	LogProbFunction lpfn;
-	bool printGradients;
-	FunctionPoinderModel() : stan::model::prob_grad_ad(0), lpfn(NULL), printGradients(false) {}
+	FunctionPoinderModel() : stan::model::prob_grad_ad(0), lpfn(NULL) {}
 	void setLogprobFunction(LogProbFunction lp) { lpfn = lp; }
 	virtual stan::agrad::var log_prob(std::vector<stan::agrad::var>& params_r, 
 			                  std::vector<int>& params_i,
@@ -54,20 +64,44 @@ public:
 	}
 };
 
-// Packages together a stan sampler and the model it samples from
-struct SamplerState
+// HMC sampler types
+enum HMCSamplerType
 {
+	Langevin = 0,
+	NUTS
+};
+
+
+// Packages together a stan sampler and the model it samples from
+struct HMCSamplerState
+{
+private:
+	HMCSamplerType type;
 public:
 	FunctionPoinderModel model;
-	//stan::mcmc::nuts_diaggiven<boost::mt19937>* sampler;
-	stan::mcmc::lmc<boost::mt19937>* sampler;
-	//stan::mcmc::adaptive_hmc<boost::mt19937>* sampler;
-	SamplerState() : model(), sampler(NULL) {}
-	~SamplerState()
+	stan::mcmc::ppl_hmc<boost::mt19937>* sampler;
+	HMCSamplerState(HMCSamplerType t) : type(t), model(), sampler(NULL) {}
+	~HMCSamplerState()
 	{
 		if (sampler) delete sampler;
 	}
-}; 
+	void init(const std::vector<double>& params_r)
+	{
+		if (sampler == NULL)
+		{
+			std::vector<int> params_i;
+			if (type == Langevin)
+				sampler = new stan::mcmc::lmc<>(model, params_r, params_i, 0.5);	// Last param is partial momentum refreshment
+			else if (type == NUTS)
+				sampler = new stan::mcmc::nuts_diaggiven<>(model, params_r, params_i);
+		}
+		else
+		{
+			sampler->set_params_r(params_r);
+			sampler->reset_inv_masses(params_r.size());
+		}
+	}
+};
 
 // The C interface
 extern "C"
@@ -83,22 +117,23 @@ extern "C"
 		return *(num*)&v;
 	}
 
-	EXPORT SamplerState* newSampler()
+	EXPORT HMCSamplerState* newSampler(int type)
 	{
-		return new SamplerState;
+		HMCSamplerType stype = (HMCSamplerType)type;
+		return new HMCSamplerState(stype);
 	}
 
-	EXPORT void deleteSampler(SamplerState* s)
+	EXPORT void deleteSampler(HMCSamplerState* s)
 	{
 		delete s;
 	}
 
-	EXPORT void setLogprobFunction(SamplerState* s, LogProbFunction lpfn)
+	EXPORT void setLogprobFunction(HMCSamplerState* s, LogProbFunction lpfn)
 	{
 		s->model.setLogprobFunction(lpfn);
 	}
 
-	EXPORT int nextSample(SamplerState* s, double* vals)
+	EXPORT int nextSample(HMCSamplerState* s, double* vals)
 	{
 		size_t numparams = s->model.num_params_r();
 
@@ -118,7 +153,7 @@ extern "C"
 		return accepted;
 	}
 
-	EXPORT void setVariableValues(SamplerState* s, int numvals, double* vals)
+	EXPORT void setVariableValues(HMCSamplerState* s, int numvals, double* vals)
 	{
 		if (s->model.lpfn == NULL)
 		{
@@ -130,36 +165,29 @@ extern "C"
 
 		s->model.set_num_params_r(numvals);
 
-		// Initialize the sampler if this is the first time.
-		if (s->sampler == NULL)
-		{
-			std::vector<int> params_i;
-			//s->sampler = new stan::mcmc::nuts_diaggiven<>(s->model, params_r, params_i);
-			s->sampler = new stan::mcmc::lmc<>(s->model, params_r, params_i, 0.5);	// Last param is partial momentum refreshment
-			//s->sampler = new stan::mcmc::adaptive_hmc<>(s->model, params_r, params_i, 1);
-		}
-		else
-		{
-			s->sampler->set_params_r(params_r);
-			s->sampler->reset_inv_masses(numvals);
-		}
+		// Initialize the sampler with the new values.
+		s->init(params_r);
 	}
 
-	EXPORT void setVariableInvMasses(SamplerState* s, double* invmasses)
+	EXPORT void setVariableInvMasses(HMCSamplerState* s, double* invmasses)
 	{
 		std::vector<double> imasses(s->model.num_params_r());
 		memcpy(&imasses[0], invmasses, s->model.num_params_r()*sizeof(double));
 		s->sampler->set_inv_masses(imasses);
 	}
 
-	EXPORT void recomputeLogProb(SamplerState* s)
+	EXPORT void recomputeLogProb(HMCSamplerState* s)
 	{
 		s->sampler->recompute_log_prob();
 	}
-
-	// The AD arithmetic functions
-	#include "adMath.cpp"
 }
+
+
+///////////////////////////////////////////////////////////////////////
+//							  T3 Sampler							 //
+///////////////////////////////////////////////////////////////////////
+
+
 
 
 

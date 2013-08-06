@@ -20,6 +20,8 @@
 #include <stan/mcmc/hmc_base.hpp>
 #include <stan/mcmc/util.hpp>
 
+#include "ppl_hmc.hpp"
+
 namespace stan {
 
   namespace mcmc {
@@ -32,7 +34,7 @@ namespace stan {
      * <code>prob_grad</code>.  
      */
     template <class BaseRNG = boost::mt19937>
-    class nuts_diaggiven : public hmc_base<BaseRNG> {
+    class nuts_diaggiven : public ppl_hmc<BaseRNG> {
     private:
 
       // Stop immediately if H < u - _maxchange
@@ -44,8 +46,11 @@ namespace stan {
       // depth of last sample taken (-1 before any samples)
       int _lastdepth;
 
-      // Vector of per-parameter inverse masses.
-      std::vector<double> _inv_masses;
+      // moving weighted average of sample depth
+      int _avgdepth;
+
+      // weight used to calculate the above
+      double _depthAvgWeight;
 
       /**
        * Determine whether we've started to make a "U-turn" at either end
@@ -62,33 +67,6 @@ namespace stan {
         stan::math::sub(xplus, xminus, total_direction);
         return stan::math::dot(total_direction, mminus) > 0
             && stan::math::dot(total_direction, mplus) > 0;
-      }
-
-      /* Alternate version of function in util.hpp */
-      // Returns the new log probability of x and m
-      // Catches domain errors and sets logp as -inf.
-      // Uses a diagonal mass matrix
-      static double diag_leapfrog(stan::model::prob_grad& model, 
-                           std::vector<int> z, 
-                           const std::vector<double>& inv_masses,
-                           std::vector<double>& x, std::vector<double>& m,
-                           std::vector<double>& g, double epsilon,
-                           std::ostream* error_msgs = 0,
-                           std::ostream* output_msgs = 0) {
-        for (size_t i = 0; i < m.size(); i++)
-          m[i] += 0.5 * epsilon * g[i];
-        for (size_t i = 0; i < x.size(); i++)
-          x[i] += epsilon * inv_masses[i] * m[i];
-        double logp;
-        try {
-          logp = model.grad_log_prob(x, z, g, output_msgs);
-        } catch (std::domain_error e) {
-          write_error_msgs(error_msgs,e);
-          logp = -std::numeric_limits<double>::infinity();
-        }
-        for (size_t i = 0; i < m.size(); i++)
-          m[i] += 0.5 * epsilon * g[i];
-        return logp;
       }
 
     public:
@@ -122,6 +100,7 @@ namespace stan {
       nuts_diaggiven(stan::model::prob_grad& model,
            const std::vector<double>& params_r,
            const std::vector<int>& params_i,
+           double depthAvgWeight = 0.75,
            int maxdepth = 10,
            double epsilon = -1,
            double epsilon_pm = 0.0,
@@ -129,19 +108,19 @@ namespace stan {
            double delta = 0.6, 
            double gamma = 0.05,
      BaseRNG base_rng = BaseRNG(std::time(0))) 
-        : hmc_base<BaseRNG>(model,
+        : ppl_hmc<BaseRNG>(model,
                             params_r,
                             params_i,
+                            delta,
+                            gamma,
                             epsilon,
                             epsilon_pm,
                             epsilon_adapt,
-                            delta,
-                            gamma,
                             base_rng),
           _maxchange(-1000),
           _maxdepth(maxdepth),
           _lastdepth(-1),
-          _inv_masses(model.num_params_r(), 1.0)
+          _depthAvgWeight(depthAvgWeight)
       {
         // start at 10 * epsilon because NUTS cheaper for larger epsilon
         this->adaptation_init(10.0);
@@ -228,6 +207,11 @@ namespace stan {
         }
         _lastdepth = depth;
 
+        if (_avgdepth == 0)
+          _avgdepth = _lastdepth;
+        else
+          _avgdepth = (int)(((double)_depthAvgWeight*_avgdepth) + ((double)(1.0-_depthAvgWeight)*_lastdepth));
+
         // Now we just have to update epsilon, if adaptation is on.
         double adapt_stat = prob_sum / float(n_considered);
         if (this->adapting()) {
@@ -272,19 +256,9 @@ namespace stan {
           values.push_back(this->_epsilon_last);
       }
 
-      void set_inv_masses(const std::vector<double>& invmasses)
+      int get_average_depth()
       {
-        _inv_masses = invmasses;
-      }
-
-      void reset_inv_masses(size_t num)
-      {
-        _inv_masses = std::vector<double>(num, 1.0);
-      }
-
-      void recompute_log_prob()
-      {
-        this->_logp = this->_model.grad_log_prob(this->_x,this->_z,this->_g);
+        return _avgdepth;
       }
 
       /**
@@ -345,7 +319,7 @@ namespace stan {
           xminus = x;
           gradminus = grad;
           mminus = m;
-          newlogp = diag_leapfrog(this->_model, this->_z, _inv_masses, 
+          newlogp = ppl_hmc<>::diag_leapfrog(this->_model, this->_z, this->_inv_masses, 
                                   xminus, mminus, gradminus, 
                                   direction * this->_epsilon_last,
                                   this->_error_msgs, this->_output_msgs);
