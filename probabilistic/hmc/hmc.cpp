@@ -84,15 +84,15 @@ enum HMCSamplerType
 
 
 // Packages together a stan sampler and the model it samples from
-struct HMCSamplerState
+struct HMC_SamplerState
 {
 private:
 	HMCSamplerType type;
 public:
 	FunctionPoinderModel model;
 	stan::mcmc::ppl_hmc<boost::mt19937>* sampler;
-	HMCSamplerState(HMCSamplerType t) : type(t), model(), sampler(NULL) {}
-	~HMCSamplerState()
+	HMC_SamplerState(HMCSamplerType t) : type(t), model(), sampler(NULL) {}
+	~HMC_SamplerState()
 	{
 		if (sampler) delete sampler;
 	}
@@ -116,23 +116,23 @@ public:
 
 extern "C"
 {
-	EXPORT HMCSamplerState* newSampler(int type)
+	EXPORT HMC_SamplerState* HMC_newSampler(int type)
 	{
 		HMCSamplerType stype = (HMCSamplerType)type;
-		return new HMCSamplerState(stype);
+		return new HMC_SamplerState(stype);
 	}
 
-	EXPORT void deleteSampler(HMCSamplerState* s)
+	EXPORT void HMC_deleteSampler(HMC_SamplerState* s)
 	{
 		delete s;
 	}
 
-	EXPORT void setLogprobFunction(HMCSamplerState* s, LogProbFunction lpfn)
+	EXPORT void HMC_setLogprobFunction(HMC_SamplerState* s, LogProbFunction lpfn)
 	{
 		s->model.setLogprobFunction(lpfn);
 	}
 
-	EXPORT int nextSample(HMCSamplerState* s, double* vals)
+	EXPORT int HMC_nextSample(HMC_SamplerState* s, double* vals)
 	{
 		size_t numparams = s->model.num_params_r();
 
@@ -152,7 +152,7 @@ extern "C"
 		return accepted;
 	}
 
-	EXPORT void setVariableValues(HMCSamplerState* s, int numvals, double* vals)
+	EXPORT void HMC_setVariableValues(HMC_SamplerState* s, int numvals, double* vals)
 	{
 		if (s->model.lpfn == NULL)
 		{
@@ -168,14 +168,14 @@ extern "C"
 		s->init(params_r);
 	}
 
-	EXPORT void setVariableInvMasses(HMCSamplerState* s, double* invmasses)
+	EXPORT void HMC_setVariableInvMasses(HMC_SamplerState* s, double* invmasses)
 	{
 		std::vector<double> imasses(s->model.num_params_r());
 		memcpy(&imasses[0], invmasses, s->model.num_params_r()*sizeof(double));
 		s->sampler->set_inv_masses(imasses);
 	}
 
-	EXPORT void recomputeLogProb(HMCSamplerState* s)
+	EXPORT void HMC_recomputeLogProb(HMC_SamplerState* s)
 	{
 		s->sampler->recompute_log_prob();
 	}
@@ -187,50 +187,47 @@ extern "C"
 ///////////////////////////////////////////////////////////////////////
 
 
-struct T3SamplerState
+struct T3_SamplerState
 {
 public:
 	int _steps;
 	double _globalTempMult;
-	HMCSamplerState* _hmcs;
+	HMC_SamplerState* _hmcs;
 	InterpolatedFunctionPointerModel model;
 	stan::mcmc::t3<boost::mt19937>* sampler;
-	T3SamplerState(int steps, double globalTempMult, HMCSamplerState* hmcs)
+	T3_SamplerState(int steps, double globalTempMult, HMC_SamplerState* hmcs)
 		: model(), sampler(NULL), _steps(steps), _globalTempMult(globalTempMult),
 		  _hmcs(hmcs) {}
-	~T3SamplerState() { if (sampler) delete sampler; }
+	~T3_SamplerState() { if (sampler) delete sampler; }
 };
 
 extern "C"
 {
-
-	EXPORT T3SamplerState* newSampler(int steps, double globalTempMult)
+	// Instead of a fixed number of steps, (optionally) use the average tree depth of a NUTS sampler
+	EXPORT T3_SamplerState* T3_newSampler(int steps, double globalTempMult, HMC_SamplerState* lengthOracle)
 	{
-		return new T3SamplerState(steps, globalTempMult, NULL);
+		if (lengthOracle != NULL)
+		{
+			stan::mcmc::nuts_diaggiven<boost::mt19937>* casted = 
+			dynamic_cast<stan::mcmc::nuts_diaggiven<boost::mt19937>*>(lengthOracle->sampler);
+			if (casted == NULL)
+				hmcError("Cannot use a non-NUTS sampler as the length oracle for a T3 sampler.");
+		}
+
+		return new T3_SamplerState(steps, globalTempMult, lengthOracle);
 	}
 
-	// Instead of a fixed number of steps, use the average tree depth of a NUTS sampler
-	EXPORT T3SamplerState* newSampler(HMCSamplerState* hmcs, double globalTempMult)
-	{
-		stan::mcmc::nuts_diaggiven<boost:mt19937>* casted = 
-		dynamic_cast<stan::mcmc::nuts_diaggiven<boost:mt19937>*>(hmcs->sampler);
-		if (casted == NULL)
-			hmcError("Cannot use a non-NUTS sampler as the length oracle for a T3 sampler.");
-
-		return new T3SamplerState(-1, globalTempMult, hmcs);
-	}
-
-	EXPORT void deleteSampler(T3SamplerState* s)
+	EXPORT void T3_deleteSampler(T3_SamplerState* s)
 	{
 		delete s;
 	}
 
-	EXPORT void setLogprobFunctions(T3SamplerState* s, LogProbFunction lpfn1, LogProbFunction lpfn2)
+	EXPORT void T3_setLogprobFunctions(T3_SamplerState* s, LogProbFunction lpfn1, LogProbFunction lpfn2)
 	{
 		s->model.setLogprobFunctions(lpfn1, lpfn2);
 	}
 
-	EXPORT double nextSample(T3SamplerState* s, int numvals, double* vals,
+	EXPORT double T3_nextSample(T3_SamplerState* s, int numvals, double* vals,
 							 int numOldIndices, int* oldVarIndices, int numNewIndices, int* newVarIndices)
 	{
 		// Set variable values, reset inverse masses
@@ -242,15 +239,15 @@ extern "C"
 		if (s->sampler == NULL)
 		{
 			std::vector<int> params_i;
-			stan::mcmc::nuts_diaggiven<boost:mt19937>* casted = 
-				dynamic_cast<stan::mcmc::nuts_diaggiven<boost:mt19937>*>(s->_hmcs->sampler);
-			s->sampler = new stan::mcmc::t3<boost::mt19937>(model, params_r, params_i,
+			stan::mcmc::nuts_diaggiven<boost::mt19937>* casted = 
+				dynamic_cast<stan::mcmc::nuts_diaggiven<boost::mt19937>*>(s->_hmcs->sampler);
+			s->sampler = new stan::mcmc::t3<boost::mt19937>(s->model, params_r, params_i,
 															s->_steps, s->_globalTempMult, casted);
 		}
 		else
 		{
-			sampler->set_params_r(params_r);
-			sampler->reset_inv_masses(params_r.size());
+			s->sampler->set_params_r(params_r);
+			s->sampler->reset_inv_masses(params_r.size());
 		}
 
 		// Set var indices
@@ -262,7 +259,7 @@ extern "C"
 
 		// Now actually take the step
 		stan::mcmc::sample samp = s->sampler->next();
-		const std::vector<double>& newvals = samp->params_r();
+		const std::vector<double>& newvals = samp.params_r();
 		memcpy(vals, &newvals[0], numvals*sizeof(double));
 		return samp.log_prob();	// This actually returns the kinetic energy difference.
 	}

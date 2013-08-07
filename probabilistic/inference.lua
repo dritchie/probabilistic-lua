@@ -313,6 +313,55 @@ end
 
 
 
+-- MCMC transition kernel that probabilistically selects between multiple sub-kernels
+local MultiKernel = {}
+
+-- No default parameters
+
+function MultiKernel:new(kernels, names, freqs)
+	local newobj = 
+	{
+		kernels = kernels,
+		names = names,
+		freqs = freqs,
+		currKernelIndex = 0
+	}
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+function MultiKernel:assumeControl(currTrace)
+	return currTrace
+end
+
+function MultiKernel:next(currState, hyperparms)
+	local whichKernel = random.multinomial_sample(unpack(self.freqs))
+	if whichKernel ~= self.currKernelIndex then
+		if self.currKernelIndex > 0 then
+			currState = self.kernels[self.currKernelIndex]:releaseControl(currState)
+		end
+		currState = self.kernels[whichKernel]:assumeControl(currState)
+	end
+	self.currKernelIndex = whichKernel
+	return self.kernels[whichKernel]:next(currState, hyperparms)
+end
+
+function MultiKernel:releaseControl(currState)
+	if self.currKernelIndex > 0 then
+		currState = self.kernels[self.currKernelIndex]:releaseControl(currState)
+	end
+	return currState
+end
+
+function MultiKernel:stats()
+	for i,n in ipairs(self.names) do
+		print(string.format("-- Kernel %i (%s) --", i, n))
+		self.kernels[i]:stats()
+	end
+end
+
+
 -- Abstraction for the linear interpolation of two execution traces
 local LARJInterpolationTrace = {}
 
@@ -426,6 +475,8 @@ function LARJInterpolationTrace:flushLogProbs()
 end
 
 
+-- New LARJ Kernel should do check for 'no free random variables'
+
 -- MCMC transition kernel that does reversible jumps using the LARJ algorithm
 local LARJKernel = {}
 
@@ -433,24 +484,17 @@ local LARJKernel = {}
 KernelParams.annealIntervals = 0
 KernelParams.annealStepsPerInterval = 1
 KernelParams.globalTempMult = 1.0
-KernelParams.jumpFreq = nil
+KernelParams.jumpFreq = 0.1
 
-function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval, globalTempMult, jumpFreq)
+function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval, globalTempMult)
 	local newobj = {
 		diffusionKernel = diffusionKernel,
 		annealIntervals = annealIntervals,
 		annealStepsPerInterval = annealStepsPerInterval,
 		globalTempMult = globalTempMult,
-		jumpFreq = jumpFreq,
 
-		currentNumStruct = 0,
-		currentNumNonStruct = 0,
-		isDiffusing = false,
-
-		jumpProposalsMade = 0,
-		jumpProposalsAccepted = 0,
-		diffusionProposalsMade = 0,
-		diffusionProposalsAccepted = 0,
+		proposalsMade = 0,
+		proposalsAccepted = 0,
 		annealingProposalsMade = 0,
 		annealingProposalsAccepted = 0
 	}
@@ -459,62 +503,27 @@ function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval
 	return newobj
 end
 
-function LARJKernel:updateCurrentTraceData(currTrace)
-	self.currentNumStruct = table.getn(currTrace:freeVarNames(true, false))
-	self.currentNumNonStruct = table.getn(currTrace:freeVarNames(false, true))
-end
-
 function LARJKernel:assumeControl(currTrace)
-	self:updateCurrentTraceData(currTrace)
-	self.isDiffusing = false
 	return currTrace
 end
 
 function LARJKernel:next(currState, hyperparams)
-	if not self.isDiffusing then
-		self:updateCurrentTraceData(currState)
-		-- If we have no free random variables, then just run the computation
-		-- and generate another sample (this may not actually be deterministic,
-		-- in the case of nested query)
-		if self.currentNumStruct + self.currentNumNonStruct == 0 then
-			local newTrace = currState:deepcopy()
-			newTrace:traceUpdate()
-			return newTrace
-		end
-	end
-	-- Decide whether to jump or diffuse
-	local structChoiceProb = self.jumpFreq or self.currentNumStruct/(self.currentNumStruct+self.currentNumNonStruct)
-	if math.random() < structChoiceProb then
-		-- Make a structural proposal
-		if self.isDiffusing then
-			local currTrace = self.diffusionKernel:releaseControl(currState)
-			currTrace = self:assumeControl(currTrace)
-			return self:jumpStep(currTrace)
-		else
-			return self:jumpStep(currState)
-		end
-	else
-		-- Make a nonstructural proposal
-		if not self.isDiffusing then
-			local currTrace = self:releaseControl(currState)
-			currState = self.diffusionKernel:assumeControl(currTrace)
-			self.isDiffusing = true
-		end
-		local prevAccepted = self.diffusionKernel.proposalsAccepted
-		local nextState = self.diffusionKernel:next(currState)
-		self.diffusionProposalsMade = self.diffusionProposalsMade + 1
-		self.diffusionProposalsAccepted = self.diffusionProposalsAccepted + self.diffusionKernel.proposalsAccepted - prevAccepted
-		return nextState
-	end
-end
 
-function LARJKernel:jumpStep(currTrace)
-	self.jumpProposalsMade = self.jumpProposalsMade + 1
-	local oldStructTrace = currTrace:deepcopy()
-	local newStructTrace = currTrace:deepcopy()
+	-- If we have no free structural variables, then just run the computation
+	-- and generate another sample (this may not actually be deterministic,
+	-- in the case of nested query)
+	local structVars = currState:freeVarNames(true, false)
+	if #structVars == 0 then
+		local newTrace = currState:deepcopy()
+		newTrace:traceUpdate(true)
+		return newTrace
+	end
+
+	self.proposalsMade = self.proposalsMade + 1
+	local oldStructTrace = currState:deepcopy()
+	local newStructTrace = currState:deepcopy()
 
 	-- Randomly choose a structural variable to change
-	local structVars = newStructTrace:freeVarNames(true, false)
 	local name = util.randomChoice(structVars)
 	local var = newStructTrace.vars[name]
 	local origval = var.val
@@ -538,6 +547,7 @@ function LARJKernel:jumpStep(currTrace)
 		local lerpTrace = LARJInterpolationTrace:new(oldStructTrace, newStructTrace)
 		local hyperparams = HyperParamTable:new()
 		hyperparams:add(lerpTrace.alpha)
+		local prevProposed = self.diffusionKernel.proposalsMade
 		local prevAccepted = self.diffusionKernel.proposalsAccepted
 
 		--print("=== BEGIN ANNEALING ===")
@@ -545,7 +555,6 @@ function LARJKernel:jumpStep(currTrace)
 
 		lerpTrace = self:releaseControl(lerpTrace)
 		local lerpState = self.diffusionKernel:assumeControl(lerpTrace)
-		self.isDiffusing = true
 
 		local oldVars = lerpTrace.trace1:varDiff(lerpTrace.trace2)
 		local newVars = lerpTrace.trace2:varDiff(lerpTrace.trace1)
@@ -578,22 +587,22 @@ function LARJKernel:jumpStep(currTrace)
 
 		end
 
-		-- DEBUG output
-		print("=====================")
-		print(string.format("%d -> %d", #oldStructTrace:freeVarNames(false, true), #newStructTrace:freeVarNames(false, true)))
-		print("- - - - - - - - - ")
-		-- for i,v in ipairs(accepts) do
-		-- 	if v then print(i) end
-		-- end
-		local numAccepts = 0
-		for i,v in ipairs(accepts) do
-			if v then numAccepts = numAccepts + 1 end
-		end
-		print(string.format("%g%%\n", numAccepts/#accepts * 100))
+		-- -- DEBUG output
+		-- print("=====================")
+		-- print(string.format("%d -> %d", #oldStructTrace:freeVarNames(false, true), #newStructTrace:freeVarNames(false, true)))
 		-- print("- - - - - - - - - ")
-		-- for i,n in ipairs(lerpState:freeVarNames(false, true)) do
-		-- 	print(lerpState:getRecord(n):getProp("val"), lerpState:getRecord(n):getProp("logprob"))
+		-- -- for i,v in ipairs(accepts) do
+		-- -- 	if v then print(i) end
+		-- -- end
+		-- local numAccepts = 0
+		-- for i,v in ipairs(accepts) do
+		-- 	if v then numAccepts = numAccepts + 1 end
 		-- end
+		-- print(string.format("%g%%\n", numAccepts/#accepts * 100))
+		-- -- print("- - - - - - - - - ")
+		-- -- for i,n in ipairs(lerpState:freeVarNames(false, true)) do
+		-- -- 	print(lerpState:getRecord(n):getProp("val"), lerpState:getRecord(n):getProp("logprob"))
+		-- -- end
 
 		lerpTrace = self.diffusionKernel:releaseControl(lerpState)
 		lerpTrace = self:assumeControl(lerpTrace)
@@ -605,35 +614,41 @@ function LARJKernel:jumpStep(currTrace)
 		self.annealingProposalsAccepted = self.annealingProposalsAccepted + self.diffusionKernel.proposalsAccepted - prevAccepted
 		oldStructTrace = lerpTrace.trace1
 		newStructTrace = lerpTrace.trace2
+
+		-- Reset the stats on the diffusion kernel (we don't want to corrupt them if we're using this same kernel elsewhere...)
+		-- NOTE: This is not a foolproof solution. The diffusion kernel may track other stats that we don't know about and can't
+		--   reset...
+		self.diffusionKernel.proposalsMade = prevProposed
+		self.diffusionKernel.proposalsAccepted = prevAccepted
 	end
 
 	-- Finalize accept/reject decision
 	var = newStructTrace.vars[name]
 	local rvsPropLP = var.erp:logProposalProb(propval, origval, var.params) + oldStructTrace:lpDiff(newStructTrace) - math.log(newNumVars)
-	local acceptanceProb = newStructTrace.logprob - currTrace.logprob + rvsPropLP - fwdPropLP + annealingLpRatio
+	local acceptanceProb = newStructTrace.logprob - currState.logprob + rvsPropLP - fwdPropLP + annealingLpRatio
 	local accepted = newStructTrace.conditionsSatisfied and math.log(math.random()) < acceptanceProb
 
-	-- DEBUG output
-	print("---------------")
-	print("accepted:", accepted)
-	print("newStructTrace.logprob: ", newStructTrace.logprob)
-	print("currTrace.logprob:", currTrace.logprob)
-	print("rvsPropLP:", rvsPropLP)
-	print("log propsal prob:", var.erp:logProposalProb(propval, origval, var.params))
-	print("lpDiff:", oldStructTrace:lpDiff(newStructTrace))
-	print("log num vars:", math.log(newNumVars))
-	print("fwdPropLP:", fwdPropLP)
-	print(string.format("annealingLpRatio: %g", annealingLpRatio))
-	print(string.format("acceptanceProb: %g", acceptanceProb))
-	print(string.format("lpDiffWithoutAnnealing: %g", newLpWithoutAnnealing - currTrace.logprob))
-	print(string.format("lpDiffWithAnnealing: %g", newStructTrace.logprob - currTrace.logprob))
-	print(string.format("diffAnnealingMade: %g", newStructTrace.logprob - newLpWithoutAnnealing))
+	-- -- DEBUG output
+	-- print("---------------")
+	-- print("accepted:", accepted)
+	-- print("newStructTrace.logprob: ", newStructTrace.logprob)
+	-- print("currState.logprob:", currState.logprob)
+	-- print("rvsPropLP:", rvsPropLP)
+	-- print("log propsal prob:", var.erp:logProposalProb(propval, origval, var.params))
+	-- print("lpDiff:", oldStructTrace:lpDiff(newStructTrace))
+	-- print("log num vars:", math.log(newNumVars))
+	-- print("fwdPropLP:", fwdPropLP)
+	-- print(string.format("annealingLpRatio: %g", annealingLpRatio))
+	-- print(string.format("acceptanceProb: %g", acceptanceProb))
+	-- print(string.format("lpDiffWithoutAnnealing: %g", newLpWithoutAnnealing - currState.logprob))
+	-- print(string.format("lpDiffWithAnnealing: %g", newStructTrace.logprob - currState.logprob))
+	-- print(string.format("diffAnnealingMade: %g", newStructTrace.logprob - newLpWithoutAnnealing))
 
 	if accepted then
-		self.jumpProposalsAccepted = self.jumpProposalsAccepted + 1
+		self.proposalsAccepted = self.proposalsAccepted + 1
 		return newStructTrace
 	else
-		return currTrace
+		return currState
 	end
 end
 
@@ -642,22 +657,14 @@ function LARJKernel:releaseControl(currTrace)
 end
 
 function LARJKernel:stats()
-	local overallProposalsMade = self.jumpProposalsMade + self.diffusionProposalsMade
-	local overallProposalsAccepted = self.jumpProposalsAccepted + self.diffusionProposalsAccepted
-	if self.diffusionProposalsMade > 0 then
-		print(string.format("Diffusion acceptance ratio: %g (%u/%u)", self.diffusionProposalsAccepted/self.diffusionProposalsMade,
-																	  self.diffusionProposalsAccepted, self.diffusionProposalsMade))
-	end
-	if self.jumpProposalsMade > 0 then
-		print(string.format("Jump acceptance ratio: %g (%u/%u)", self.jumpProposalsAccepted/self.jumpProposalsMade,
-																	  self.jumpProposalsAccepted, self.jumpProposalsMade))
+	if self.proposalsMade > 0 then
+		print(string.format("Jump acceptance ratio: %g (%u/%u)", self.proposalsAccepted/self.proposalsMade,
+																	  self.proposalsAccepted, self.proposalsMade))
 	end
 	if self.annealingProposalsMade > 0 then
 		print(string.format("Annealing acceptance ratio: %g (%u/%u)", self.annealingProposalsAccepted/self.annealingProposalsMade,
 																	  self.annealingProposalsAccepted, self.annealingProposalsMade))
 	end
-	print(string.format("Overall acceptance ratio: %g (%u/%u)", overallProposalsAccepted/overallProposalsMade,
-																overallProposalsAccepted, overallProposalsMade))
 end
 
 
@@ -703,24 +710,33 @@ local function driftMH(computation, params)
 end
 
 -- Sample from a probabilistic computation using locally
--- annealed reversible jump mcmc
+-- annealed reversible jump mcmc with some diffusion kernel
+local function LARJMCMC(computation, diffusionKernel, params)
+	return mcmc(computation,
+				MultiKernel:new({
+									diffusionKernel,
+									LARJKernel:new(diffusionKernel, params.annealIntervals, params.annealStepsPerInterval,
+												   params.globalTempMult)
+								},
+								{"Diffusion", "LARJ"},
+								{1.0-params.jumpFreq, params.jumpFreq}),
+				params)
+end
+
+-- Sample from a probabilistic computation using locally
+-- annealed reversible jump mcmc, using random walk trace MH as the diffusion kernel
 local function LARJTraceMH(computation, params)
 	params = KernelParams:new(params)
-	return mcmc(computation,
-				LARJKernel:new(RandomWalkKernel:new(false, true), params.annealIntervals,
-							   params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
-				params)
+	local diffusionKernel = RandomWalkKernel:new(false, true)
+	return LARJMCMC(computation, diffusionKernel, params)
 end
 
 -- Sample from a probabilistic computation using LARJMCMC
 -- with gaussian drift as the inner diffusion kernel
 local function LARJDriftMH(computation, params)
 	params = KernelParams:new(params)
-	return mcmc(computation,
-				LARJKernel:new(
-					GaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth),
-					params.annealIntervals, params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
-				params)
+	local diffusionKernel = GaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth)
+	return LARJMCMC(computation, diffusionKernel, params)
 end
 
 
@@ -739,6 +755,7 @@ return
 	mcmc = mcmc,
 	traceMH = traceMH,
 	driftMH = driftMH,
+	LARJMCMC = LARJMCMC,
 	LARJTraceMH = LARJTraceMH,
 	LARJDriftMH = LARJDriftMH
 }

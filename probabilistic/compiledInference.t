@@ -492,8 +492,8 @@ setmetatable(CompiledHMCKernel, {__index = CompiledKernel})
 function CompiledHMCKernel:new(cacheSize)
 	local newobj = CompiledKernel.new(self, cacheSize)
 
-	newobj.sampler = hmc.newSampler()
-	ffi.gc(newobj.sampler, function(self) hmc.deleteSampler(self) end)
+	newobj.sampler = hmc.HMC_newSampler(1)	-- 0 for Langevin, 1 for NUTS
+	ffi.gc(newobj.sampler, function(self) hmc.HMC_deleteSampler(self) end)
 
 	return newobj
 end
@@ -506,7 +506,7 @@ function CompiledHMCKernel:doCompile(currState)
 	local paramVars
 	lpfn, paramVars = self:compileLogProbFunction(currState, hmc.num)
 	self.lpfn = lpfn 	-- We *MUST* anchor this function like this or it'll get GC'ed!!!
-	hmc.setLogprobFunction(self.sampler, lpfn.definitions[1]:getpointer())
+	hmc.HMC_setLogprobFunction(self.sampler, lpfn.definitions[1]:getpointer())
 
 	-- Generate a specialized step function
 	prof.startTimer("StepFunctionCompile")
@@ -515,7 +515,7 @@ function CompiledHMCKernel:doCompile(currState)
 		if not self.initialized then
 			self.initialized = true
 			self:setCurrHyperParams(paramVars, hyperparams)
-			hmc.setVariableValues(self.sampler, state.numVars, state.varVals)
+			hmc.HMC_setVariableValues(self.sampler, state.numVars, state.varVals)
 		end
 		return normalStepFn(state, hyperparams)
 	end
@@ -528,7 +528,7 @@ function CompiledHMCKernel:genStepFunction()
 	-- The compiled Terra function
 	local step = 
 		terra(vals: &double, currLP: double)
-			var accepted = hmc.nextSample([self.sampler], vals)
+			var accepted = hmc.HMC_nextSample([self.sampler], vals)
 			return [bool](accepted)
 		end
 
@@ -552,15 +552,15 @@ function HMCKernel:new()
 	{
 		proposalsMade = 0,
 		proposalsAccepted = 0,
-		sampler = hmc.newSampler(0)		-- 0 for Langevin, 1 for NUTS
+		sampler = hmc.HMC_newSampler(0)		-- 0 for Langevin, 1 for NUTS
 	}
-	ffi.gc(newobj.sampler, function(self) hmc.deleteSampler(self) end)
+	ffi.gc(newobj.sampler, function(self) hmc.HMC_deleteSampler(self) end)
 
 	setmetatable(newobj, self)
 	self.__index = self
 
 	newobj.lpfn = newobj:makeLogProbFn()
-	hmc.setLogprobFunction(newobj.sampler, newobj.lpfn.definitions[1]:getpointer())
+	hmc.HMC_setLogprobFunction(newobj.sampler, newobj.lpfn.definitions[1]:getpointer())
 
 	return newobj
 end
@@ -584,7 +584,7 @@ function HMCKernel:assumeControl(currTrace)
 		end
 	end
 
-	hmc.setVariableValues(self.sampler, numVars, self.varVals)
+	hmc.HMC_setVariableValues(self.sampler, numVars, self.varVals)
 
 	self.currentTrace = currTrace
 	return self.currentTrace
@@ -600,11 +600,11 @@ function HMCKernel:next(currState, hyperparams)
 	-- will be stale since it was calculated using the previous annealing alpha,
 	-- not the current one.
 	if self.annealing then
-		hmc.recomputeLogProb(self.sampler)
+		hmc.HMC_recomputeLogProb(self.sampler)
 	end
 
 	self.currentTrace = currState:deepcopy()
-	local accepted = util.int2bool(hmc.nextSample(self.sampler, self.varVals))
+	local accepted = util.int2bool(hmc.HMC_nextSample(self.sampler, self.varVals))
 	self.proposalsMade = self.proposalsMade + 1
 	if accepted then
 		self.proposalsAccepted = self.proposalsAccepted + 1
@@ -664,7 +664,7 @@ function HMCKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
 			invmasses[i-1] = newScale
 		end
 	end
-	hmc.setVariableInvMasses(self.sampler, invmasses)
+	hmc.HMC_setVariableInvMasses(self.sampler, invmasses)
 end
 
 
@@ -683,11 +683,8 @@ end
 -- inner kernel that runs compiled Gaussian drift MH
 local function LARJDriftMH_JIT(computation, params)
 	params = inf.KernelParams:new(params)
-	return inf.mcmc(computation,
-					inf.LARJKernel:new(
-						CompiledGaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth, params.cacheSize),
-						params.annealIntervals, params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
-					params)
+	local diffusionKernel = CompiledGaussianDriftKernel:new(params.bandwidthMap, params.defaultBandwidth, params.cacheSize)
+	return inf.LARJMCMC(computation, diffusionKernel, params)
 end
 
 -- Sample from a fixed-structure probabilistic computation
@@ -703,11 +700,8 @@ end
 -- inner kernel that runs compiled HMC.
 local function LARJHMC_JIT(computation, params)
 	params = inf.KernelParams:new(params)
-	return inf.mcmc(computation,
-					inf.LARJKernel:new(
-						CompiledHMCKernel:new(params.cacheSize),
-						params.annealIntervals, params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
-					params)
+	local diffusionKernel = CompiledHMCKernel:new(params.cacheSize)
+	return inf.LARJMCMC(computation, diffusionKernel, params)
 end
 
 local function HMC(computation, params)
@@ -719,11 +713,8 @@ end
 
 local function LARJHMC(computation, params)
 	params = inf.KernelParams:new(params)
-	return inf.mcmc(computation,
-					inf.LARJKernel:new(
-						HMCKernel:new(),
-						params.annealIntervals, params.annealStepsPerInterval, params.globalTempMult, params.jumpFreq),
-					params)
+	local diffusionKernel = HMCKernel:new()
+	return inf.LARJMCMC(computation, diffusionKernel, params)
 end
 
 -- Module exports

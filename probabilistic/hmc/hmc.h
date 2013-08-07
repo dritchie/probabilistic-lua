@@ -17,23 +17,22 @@ the HMC sampling library
 		NUTS
 	};
 */
-struct HMCSamplerState;
-struct HMCSamplerState* newSampler(int type);
-void deleteSampler(struct HMCSamplerState* s);
-void setLogprobFunction(struct HMCSamplerState* s, LogProbFunction lpfn);
-int nextSample(struct HMCSamplerState* s, double* vals);
-void setVariableValues(struct HMCSamplerState* s, int numvals, double* vals);
-void setVariableInvMasses(struct HMCSamplerState* s, double* invmasses);
-void recomputeLogProb(struct HMCSamplerState* s);
+struct HMC_SamplerState;
+struct HMC_SamplerState* HMC_newSampler(int type);
+void HMC_deleteSampler(struct HMC_SamplerState* s);
+void HMC_setLogprobFunction(struct HMC_SamplerState* s, LogProbFunction lpfn);
+int HMC_nextSample(struct HMC_SamplerState* s, double* vals);
+void HMC_setVariableValues(struct HMC_SamplerState* s, int numvals, double* vals);
+void HMC_setVariableInvMasses(struct HMC_SamplerState* s, double* invmasses);
+void HMC_recomputeLogProb(struct HMC_SamplerState* s);
 
 
 /* Interface to the T3 sampler */
-struct T3SamplerState;
-struct T3SamplerState* newSampler(int steps, double globalTempMult);
-// Instead of a fixed number of steps, use the average tree depth of a NUTS sampler
-struct T3SamplerState* newSampler(struct HMCSamplerState* hmcs, double globalTempMult);
-void deleteSampler(struct T3SamplerState* s);
-void setLogprobFunctions(struct T3SamplerState* s, LogProbFunction lpfn1, LogProbFunction lpfn2);
+struct T3_SamplerState;
+// Instead of a fixed number of steps, (optionally) use the average tree depth of a NUTS sampler
+struct T3_SamplerState* T3_newSampler(int steps, double globalTempMult, struct HMC_SamplerState* lengthOracle);
+void T3_deleteSampler(struct T3_SamplerState* s);
+void T3_setLogprobFunctions(struct T3_SamplerState* s, LogProbFunction lpfn1, LogProbFunction lpfn2);
 // Returns the kinetic energy difference (necessary for acceptance criterion)
-double nextSample(struct T3SamplerState* s, int numvals, double* vals,
+double T3_nextSample(struct T3_SamplerState* s, int numvals, double* vals,
 				  int numOldIndices, int* oldVarIndices, int numNewIndices, int* newVarIndices);

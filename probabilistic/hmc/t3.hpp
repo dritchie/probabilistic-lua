@@ -1,5 +1,5 @@
-#ifndef __STAN__MCMC__LMC_H_
-#define __STAN__MCMC__LMC_H_
+#ifndef __STAN__MCMC__T3_H_
+#define __STAN__MCMC__T3_H_
 
 #include <ctime>
 #include <cstddef>
@@ -21,18 +21,22 @@
 
 #include "stan/agrad/agrad.hpp"
 #include "stan/model/prob_grad_ad.hpp"
-#include "num.h"
+
+extern "C"
+{
+	#include "num.h"
+}
 
 
 // A custom subclass of prob_grad_ad that evaluates log probabilities
 // by interpolating two function pointer functions.
-class InterpolatedFunctionPoinderModel : public stan::model::prob_grad_ad
+class InterpolatedFunctionPointerModel : public stan::model::prob_grad_ad
 {
 public:
 	LogProbFunction lpfn1;
 	LogProbFunction lpfn2;
 	double alpha;
-	InterpolatedFunctionPoinderModel() :
+	InterpolatedFunctionPointerModel() :
 		stan::model::prob_grad_ad(0), lpfn1(NULL), lpfn2(NULL), alpha(0.0) {}
 	void setLogprobFunctions(LogProbFunction lp1, LogProbFunction lp2)
 	{ lpfn1 = lp1; lpfn2 = lp2; }
@@ -172,19 +176,19 @@ namespace stan
 			{
 				this->_epsilon_last = this->_epsilon;
 
-				InterpolatedFunctionPoinderModel& model = (InterpolatedFunctionPoinderModel&)this->_model;
+				InterpolatedFunctionPointerModel& model = (InterpolatedFunctionPointerModel&)this->_model;
 
 				// Assumes that 'reset_inv_masses' has been called prior to this.
 
 				// Sample initial momentum
-				std::vector<double> m(this->model.num_params_r());
-				for (size_t i = 0; i < _m.size(); ++i)
+				std::vector<double> m(this->_model.num_params_r());
+				for (size_t i = 0; i < m.size(); ++i)
 					m[i] = this->_rand_unit_norm() * this->_inv_masses[i];
 
 				// Initial Hamiltonian
 				double fwdKineticEnergy = 0.0;
-				for (size_t i = 0; i < _m.size(); i++)
-					H += m[i]*m[i] / this->_inv_masses[i];
+				for (size_t i = 0; i < m.size(); i++)
+					fwdKineticEnergy += m[i]*m[i] / this->_inv_masses[i];
 				fwdKineticEnergy /= 2.0;
 				double H = fwdKineticEnergy - this->_logp;
 
@@ -216,8 +220,8 @@ namespace stan
 
 				// New Hamiltonian
 				double rvsKineticEnergy = 0.0;
-				for (size_t i = 0; i < m_new.size(); i++)
-					H_new += m_new[i]*m_new[i] / this->_inv_masses[i];
+				for (size_t i = 0; i < m.size(); i++)
+					rvsKineticEnergy += m[i]*m[i] / this->_inv_masses[i];
 				rvsKineticEnergy /= 2.0;
 				double H_new = rvsKineticEnergy - newlogp;
 
