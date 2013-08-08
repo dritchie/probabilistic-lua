@@ -114,21 +114,15 @@ namespace stan {
        * @return The next sample.
        */
       virtual sample next_impl() {
-        // Gibbs for discrete
-        // std::vector<double> probs;
-        // for (size_t m = 0; m < this->_model.num_params_i(); ++m) {
-        //   probs.resize(0);
-        //   for (int k = this->_model.param_range_i_lower(m); 
-        //        k < this->_model.param_range_i_upper(m); 
-        //        ++k)
-        //     probs.push_back(this->_model.log_prob_star(m,k,this->_x,this->_z));
-        //   this->_z[m] = sample_unnorm_log(probs,this->_rand_uniform_01);
-        // }
-        // HMC for continuous
+
         std::vector<double> m(this->_model.num_params_r());
         for (size_t i = 0; i < m.size(); ++i)
           m[i] = this->_rand_unit_norm() * this->_inv_masses[i];
-        double H = -(stan::math::dot_self(m) / 2.0) + this->_logp; 
+        
+        double H = 0.0;
+        for (size_t i = 0; i < m.size(); i++)
+          H += m[i]*m[i] * this->_inv_masses[i];
+        H =  -H / 2.0 + this->_logp;
         
         std::vector<double> g_new(this->_g);
         std::vector<double> x_new(this->_x);
@@ -147,7 +141,11 @@ namespace stan {
                                               this->_error_msgs, this->_output_msgs);
         this->nfevals_plus_eq(_L);
 
-        double H_new = -(stan::math::dot_self(m) / 2.0) + logp_new;
+        double H_new = 0.0;
+        for (size_t i = 0; i < m.size(); i++)
+          H_new += m[i]*m[i] * this->_inv_masses[i];
+        H_new =  -H_new / 2.0 + logp_new;
+
         double dH = H_new - H;
         if (this->_rand_uniform_01() < exp(dH)) {
           this->_x = x_new;

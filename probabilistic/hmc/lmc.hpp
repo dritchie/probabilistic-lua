@@ -91,7 +91,7 @@ namespace stan
 				// Initial Hamiltonian
 				double H = 0.0;
 				for (size_t i = 0; i < _m.size(); i++)
-					H += _m[i]*_m[i] / this->_inv_masses[i];
+					H += _m[i]*_m[i] * this->_inv_masses[i];
 				H = H / 2.0 - this->_logp;
 
 				// Leapfrog step, then negate momentum
@@ -107,7 +107,7 @@ namespace stan
 				// New Hamiltonian
 				double H_new = 0.0;
 				for (size_t i = 0; i < m_new.size(); i++)
-					H_new += m_new[i]*m_new[i] / this->_inv_masses[i];
+					H_new += m_new[i]*m_new[i] * this->_inv_masses[i];
 				H_new = H_new / 2.0 - newlogp;
 
 				// Accept/reject test

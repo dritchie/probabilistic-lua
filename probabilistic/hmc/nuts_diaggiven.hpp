@@ -147,7 +147,10 @@ namespace stan {
         std::vector<double> mplus(mminus);
         // The log-joint probability of the momentum and position terms, i.e.
         // -(kinetic energy + potential energy)
-        double H0 = -0.5 * stan::math::dot_self(mminus) + this->_logp;
+        double H0 = 0.0;
+        for (size_t i = 0; i < mminus.size(); i++)
+          H0 += mminus[i]*mminus[i] * this->_inv_masses[i];
+        H0 =  -H0 / 2.0 + this->_logp;
 
         std::vector<double> gradminus(this->_g);
         std::vector<double> gradplus(this->_g);
@@ -319,7 +322,12 @@ namespace stan {
           xplus = xminus;
           mplus = mminus;
           gradplus = gradminus;
-          double newH = newlogp - 0.5 * stan::math::dot_self(mminus);
+
+          double newH = 0.0;
+          for (size_t i = 0; i < mminus.size(); i++)
+            newH += mminus[i]*mminus[i] * this->_inv_masses[i];
+          newH = -newH / 2.0 + newlogp;
+
           if (newH != newH) // treat nan as -inf
             newH = -std::numeric_limits<double>::infinity();
           nvalid = newH > u;

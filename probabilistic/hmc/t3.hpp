@@ -188,7 +188,7 @@ namespace stan
 				// Initial Hamiltonian
 				double fwdKineticEnergy = 0.0;
 				for (size_t i = 0; i < m.size(); i++)
-					fwdKineticEnergy += m[i]*m[i] / this->_inv_masses[i];
+					fwdKineticEnergy += m[i]*m[i] * this->_inv_masses[i];
 				fwdKineticEnergy /= 2.0;
 				double H = fwdKineticEnergy - this->_logp;
 
@@ -219,7 +219,7 @@ namespace stan
 				// New Hamiltonian
 				double rvsKineticEnergy = 0.0;
 				for (size_t i = 0; i < m.size(); i++)
-					rvsKineticEnergy += m[i]*m[i] / this->_inv_masses[i];
+					rvsKineticEnergy += m[i]*m[i] * this->_inv_masses[i];
 				rvsKineticEnergy /= 2.0;
 				double H_new = rvsKineticEnergy - newlogp;
 

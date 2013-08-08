@@ -156,8 +156,8 @@ else
 	-- Actually build the shared library
 	local cppname = sourcefile:gsub("init.t", "hmc.cpp")
 	local varstack = string.format("%s/src/stan/agrad/rev/var_stack.cpp", stanroot)
-	--util.wait(string.format("clang++ -shared -O3 -I%s -I%s -I%s %s %s -o %s", srcdir, eigendir, boostdir, cppname, varstack, soname))
-	util.wait(string.format("clang++ -O0 -g -shared -I%s -I%s -I%s %s %s -o %s", srcdir, eigendir, boostdir, cppname, varstack, soname))
+	util.wait(string.format("clang++ -shared -O3 -I%s -I%s -I%s %s %s -o %s", srcdir, eigendir, boostdir, cppname, varstack, soname))
+	--util.wait(string.format("clang++ -O0 -g -shared -I%s -I%s -I%s %s %s -o %s", srcdir, eigendir, boostdir, cppname, varstack, soname))
 end
 
 
