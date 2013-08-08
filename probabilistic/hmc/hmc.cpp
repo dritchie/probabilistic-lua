@@ -5,6 +5,7 @@ This file implements the HMC sampling library and is compiled into a shared libr
 #include "stan/agrad/agrad.hpp"
 #include "stan/model/prob_grad_ad.hpp"
 #include "nuts_diaggiven.hpp"
+#include "adaptive_hmc_diaggiven.hpp"
 #include "lmc.hpp"
 #include "t3.hpp"
 
@@ -79,19 +80,22 @@ public:
 enum HMCSamplerType
 {
 	Langevin = 0,
-	NUTS
+	NUTS = 1,
+	HMC = 2
 };
 
 
 // Packages together a stan sampler and the model it samples from
 struct HMC_SamplerState
 {
-private:
-	HMCSamplerType type;
 public:
+	HMCSamplerType type;
 	FunctionPoinderModel model;
 	stan::mcmc::ppl_hmc<boost::mt19937>* sampler;
-	HMC_SamplerState(HMCSamplerType t) : type(t), model(), sampler(NULL) {}
+	int _steps;
+	double _partialMomentumAlpha;
+	HMC_SamplerState(HMCSamplerType t, int steps, double partialMomentumAlpha)
+		: type(t), model(), sampler(NULL), _steps(steps), _partialMomentumAlpha(partialMomentumAlpha) {}
 	~HMC_SamplerState()
 	{
 		if (sampler) delete sampler;
@@ -102,9 +106,11 @@ public:
 		{
 			std::vector<int> params_i;
 			if (type == Langevin)
-				sampler = new stan::mcmc::lmc<>(model, params_r, params_i, 0.5);	// Last param is partial momentum refreshment
+				sampler = new stan::mcmc::lmc<>(model, params_r, params_i, _partialMomentumAlpha);
 			else if (type == NUTS)
 				sampler = new stan::mcmc::nuts_diaggiven<>(model, params_r, params_i);
+			else if (type == HMC)
+				sampler = new stan::mcmc::adaptive_hmc_diaggiven<>(model, params_r, params_i, _steps);
 		}
 		else
 		{
@@ -116,10 +122,10 @@ public:
 
 extern "C"
 {
-	EXPORT HMC_SamplerState* HMC_newSampler(int type)
+	EXPORT HMC_SamplerState* HMC_newSampler(int type, int steps, double partialMomentumAlpha)
 	{
 		HMCSamplerType stype = (HMCSamplerType)type;
-		return new HMC_SamplerState(stype);
+		return new HMC_SamplerState(stype, steps, partialMomentumAlpha);
 	}
 
 	EXPORT void HMC_deleteSampler(HMC_SamplerState* s)
@@ -204,17 +210,9 @@ public:
 extern "C"
 {
 	// Instead of a fixed number of steps, (optionally) use the average tree depth of a NUTS sampler
-	EXPORT T3_SamplerState* T3_newSampler(int steps, double globalTempMult, HMC_SamplerState* lengthOracle)
+	EXPORT T3_SamplerState* T3_newSampler(int steps, double globalTempMult, HMC_SamplerState* oracle)
 	{
-		if (lengthOracle != NULL)
-		{
-			stan::mcmc::nuts_diaggiven<boost::mt19937>* casted = 
-			dynamic_cast<stan::mcmc::nuts_diaggiven<boost::mt19937>*>(lengthOracle->sampler);
-			if (casted == NULL)
-				hmcError("Cannot use a non-NUTS sampler as the length oracle for a T3 sampler.");
-		}
-
-		return new T3_SamplerState(steps, globalTempMult, lengthOracle);
+		return new T3_SamplerState(steps, globalTempMult, oracle);
 	}
 
 	EXPORT void T3_deleteSampler(T3_SamplerState* s)
@@ -239,10 +237,8 @@ extern "C"
 		if (s->sampler == NULL)
 		{
 			std::vector<int> params_i;
-			stan::mcmc::nuts_diaggiven<boost::mt19937>* casted = 
-				dynamic_cast<stan::mcmc::nuts_diaggiven<boost::mt19937>*>(s->_hmcs->sampler);
 			s->sampler = new stan::mcmc::t3<boost::mt19937>(s->model, params_r, params_i,
-															s->_steps, s->_globalTempMult, casted);
+															s->_steps, s->_globalTempMult, s->sampler);
 		}
 		else
 		{

@@ -120,6 +120,7 @@ namespace stan {
           _maxchange(-1000),
           _maxdepth(maxdepth),
           _lastdepth(-1),
+          _avgdepth(0),
           _depthAvgWeight(depthAvgWeight)
       {
         // start at 10 * epsilon because NUTS cheaper for larger epsilon
@@ -207,11 +208,6 @@ namespace stan {
         }
         _lastdepth = depth;
 
-        if (_avgdepth == 0)
-          _avgdepth = _lastdepth;
-        else
-          _avgdepth = (int)(((double)_depthAvgWeight*_avgdepth) + ((double)(1.0-_depthAvgWeight)*_lastdepth));
-
         // Now we just have to update epsilon, if adaptation is on.
         double adapt_stat = prob_sum / float(n_considered);
         if (this->adapting()) {
@@ -254,11 +250,6 @@ namespace stan {
         values.push_back(_lastdepth);
         if (this->_epsilon_adapt || this->varying_epsilon())
           values.push_back(this->_epsilon_last);
-      }
-
-      int get_average_depth()
-      {
-        return _avgdepth;
       }
 
       /**

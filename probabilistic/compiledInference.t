@@ -481,6 +481,14 @@ function CompiledGaussianDriftKernel:genStepFunction(numVars, lpfn, bandwidths)
 end
 
 
+local HMCKernelTypes =
+{
+	Langevin = 0,
+	NUTS = 1,
+	HMC = 2
+}
+
+
 -- An MCMC kernel that performs Hamiltonian Monte Carlo
 -- using the No-U-Turn sampler implementation provided by the
 -- stan MCMC library (on compiled traces)
@@ -489,10 +497,10 @@ setmetatable(CompiledHMCKernel, {__index = CompiledKernel})
 
 -- No default parameters needed
 
-function CompiledHMCKernel:new(cacheSize)
+function CompiledHMCKernel:new(cacheSize, type)
 	local newobj = CompiledKernel.new(self, cacheSize)
 
-	newobj.sampler = hmc.HMC_newSampler(1)	-- 0 for Langevin, 1 for NUTS
+	newobj.sampler = hmc.HMC_newSampler(type)
 	ffi.gc(newobj.sampler, function(self) hmc.HMC_deleteSampler(self) end)
 
 	return newobj
@@ -545,14 +553,16 @@ end
 -- random variables.
 local HMCKernel = {}
 
--- No default parameters needed
+-- Default parameters
+inf.KernelParams.numHMCSteps = 100
+inf.KernelParams.partialMomentumAlpha = 0.5
 
-function HMCKernel:new()
+function HMCKernel:new(type, numSteps, partialMomentumAlpha)
 	local newobj = 
 	{
 		proposalsMade = 0,
 		proposalsAccepted = 0,
-		sampler = hmc.HMC_newSampler(0)		-- 0 for Langevin, 1 for NUTS
+		sampler = hmc.HMC_newSampler(type, numSteps, partialMomentumAlpha)
 	}
 	ffi.gc(newobj.sampler, function(self) hmc.HMC_deleteSampler(self) end)
 
@@ -574,7 +584,7 @@ function HMCKernel:assumeControl(currTrace)
 	self.numVars = numVars
 	self.nonStructNames = nonStructNames
 	self.varVals = terralib.new(double[numVars])
-	for i,n in pairs(nonStructNames) do
+	for i,n in ipairs(nonStructNames) do
 		self.varVals[i-1] = self.currentTrace:getRecord(n):getProp("val")
 	end
 
@@ -668,6 +678,171 @@ function HMCKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
 end
 
 
+-- MCMC kernel that does dimension jumps via
+-- Transdimensional Tempered Trajectories (T3)
+local T3Kernel = {}
+
+-- Default parameters
+inf.KernelParams.numT3Steps = 100
+inf.KernelParams.globalTempMult = 1.0
+
+-- WTF doesn't Sublime syntax highlight this correctly? Looks like there's a bug in the
+-- language definition pertaining to method tables with numbers in their names...
+function T3Kernel:new(numSteps, globalTempMult, oracleKernel)
+	local lo = nil
+	if oracleKernel then
+		lo = oracleKernel.sampler
+	end
+	local newobj = 
+	{
+		sampler = hmc.T3_newSampler(numSteps, globalTempMult, lo),
+		proposalsAccepted = 0,
+		proposalsMade = 0
+	}
+	ffi.gc(newobj.sampler, function(self) hmc.T3_deleteSampler(self) end)
+
+	setmetatable(newobj, self)
+	self.__index = self
+
+	newobj:makeLogProbFns()
+	hmc.T3_setLogprobFunctions(newobj.sampler,
+							   newobj.lpfn1.definitions[1]:getpointer(),
+							   newobj.lpfn2.definitions[1]:getpointer())
+	return newobj
+end
+
+function T3Kernel:assumeControl(currTrace)
+	return currTrace
+end
+
+function T3Kernel:next(currState, hyperparams)
+	-- If we have no free structural variables, then just run the computation
+	-- and generate another sample (this may not actually be deterministic,
+	-- in the case of nested query)
+	local structVars = currState:freeVarNames(true, false)
+	if #structVars == 0 then
+		local newTrace = currState:deepcopy()
+		newTrace:traceUpdate(true)
+		return newTrace
+	end
+
+	self.proposalsMade = self.proposalsMade + 1
+	self.oldStructTrace = currState:deepcopy()
+	self.newStructTrace = currState:deepcopy()
+
+	-- Randomly choose a structural variable to change
+	local name = util.randomChoice(structVars)
+	local v = self.newStructTrace.vars[name]
+	local origval = v.val
+	local propval = v.erp:proposal(v.val, v.params)
+	local fwdPropLP = v.erp:logProposalProb(v.val, propval, v.params)
+	v.val = propval
+	v.logprob = v.erp:logprob(v.val, v.params)
+	self.newStructTrace:traceUpdate()
+	local oldNumVars = table.getn(self.oldStructTrace:freeVarNames(true, false))
+	local newNumVars = table.getn(self.newStructTrace:freeVarNames(true, false))
+	local fwdPropLP = fwdPropLP + self.newStructTrace.newlogprob - math.log(oldNumVars)
+
+	-- for DEBUG output
+	local newLpWithoutT3 = self.newStructTrace.logprob
+
+	-- Do the tempered trajectories part
+	local interpTrace = inf.LARJInterpolationTrace:new(self.oldStructTrace, self.newStructTrace)
+	self.oldStructTrace = interpTrace.trace1
+	self.newStructTrace = interpTrace.trace2
+	local nonStructNames = interpTrace:freeVarNames(false, true)
+	self.setNonStructValues = function(aTrace, varVals)
+		for i,n in ipairs(nonStructNames) do
+			local rec = aTrace:getRecord(n)
+			if rec then rec:setProp("val", varVals[i-1]) end
+		end
+	end
+	local numVars = #nonStructNames
+	local varVals = terralib.new(double[numVars])
+	local oldVarIndices = {}
+	local newVarIndices = {}
+	for i,n in ipairs(nonStructNames) do
+		if not self.oldStructTrace:getRecord(n) then
+			table.insert(newVarIndices, i-1)
+		end
+		if not self.newStructTrace:getRecord(n) then
+			table.insert(oldVarIndices, i-1)
+		end
+		varVals[i-1] = interpTrace:getRecord(n):getProp("val")
+	end
+	local numOldVars = #oldVarIndices
+	local numNewVars = #newVarIndices
+	oldVarIndices = terralib.new(int32[numOldVars], oldVarIndices)
+	newVarIndices = terralib.new(int32[numNewVars], newVarIndices)
+	local kineticEnergyDiff = hmc.T3_nextSample(self.sampler, numVars, varVals,
+												numOldVars, oldVarIndices, numNewVars, newVarIndices)
+	self.setNonStructValues(self.newStructTrace, varVals)
+	self.setNonStructValues(self.oldStructTrace, varVals)
+	self.newStructTrace:flushLogProbs()
+	self.oldStructTrace:flushLogProbs()
+
+	-- Decide final acceptance
+	local rvsPropLP = v.erp:logProposalProb(propval, origval, v.params) + self.oldStructTrace:lpDiff(self.newStructTrace) - math.log(newNumVars)
+	local acceptanceProb = self.newStructTrace.logprob - currState.logprob + rvsPropLP - fwdPropLP + kineticEnergyDiff
+	local accepted = self.newStructTrace.conditionsSatisfied and math.log(math.random()) < acceptanceProb
+
+	-- DEBUG output
+	print("=====================")
+	print(string.format("%d -> %d", #self.oldStructTrace:freeVarNames(false, true), #self.newStructTrace:freeVarNames(false, true)))
+	print("- - - - - - - - - ")
+	print("accepted:", accepted)
+	print("newStructTrace.logprob: ", self.newStructTrace.logprob)
+	print("currState.logprob:", currState.logprob)
+	print("rvsPropLP:", rvsPropLP)
+	print("log propsal prob:", v.erp:logProposalProb(propval, origval, v.params))
+	print("lpDiff:", self.oldStructTrace:lpDiff(self.newStructTrace))
+	print("log num vars:", math.log(newNumVars))
+	print("fwdPropLP:", fwdPropLP)
+	print(string.format("kineticEnergyDiff: %g", kineticEnergyDiff))
+	print(string.format("acceptanceProb: %g", acceptanceProb))
+	print(string.format("lpDiffWithoutT3: %g", newLpWithoutT3 - currState.logprob))
+	print(string.format("lpDiffWithT3: %g", self.newStructTrace.logprob - currState.logprob))
+	print(string.format("diffT3Made: %g", self.newStructTrace.logprob - newLpWithoutT3))
+
+	if accepted then
+		self.proposalsAccepted = self.proposalsAccepted + 1
+		return self.newStructTrace
+	else
+		return currState
+	end
+end
+
+function T3Kernel:makeLogProbFns()
+	local this = self
+	local function makeLpFn(tracePropName)
+		local function lp(varVals)
+			local aTrace = this[tracePropName]
+			this.setNonStructValues(aTrace, varVals)
+			hmc.toggleLuaAD(true)
+			aTrace:flushLogProbs()
+			local retval = aTrace.logprob.impl
+			hmc.toggleLuaAD(false)
+			return retval
+		end
+		local lpfn = terralib.cast({&hmc.num} -> {&uint8}, lp)
+		return terra(varVals: &hmc.num)
+			var impl = lpfn(varVals)
+			return hmc.num { impl }
+		end
+	end
+	self.lpfn1 = makeLpFn("oldStructTrace")
+	self.lpfn2 = makeLpFn("newStructTrace")
+end
+
+function T3Kernel:releaseControl(currState)
+	return currState
+end
+
+function T3Kernel:stats()
+	print(string.format("Acceptance ratio: %g (%u/%u)", self.proposalsAccepted/self.proposalsMade,
+														self.proposalsAccepted, self.proposalsMade))
+end
+
 
 
 -- Sample from a fixed-structure probabilistic computation for some
@@ -692,7 +867,7 @@ end
 local function HMC_JIT(computation, params)
 	params = inf.KernelParams:new(params)
 	return inf.mcmc(computation,
-					CompiledHMCKernel:new(params.cacheSize),
+					CompiledHMCKernel:new(params.cacheSize, HMCKernelTypes.NUTS),
 					params)
 end
 
@@ -700,21 +875,34 @@ end
 -- inner kernel that runs compiled HMC.
 local function LARJHMC_JIT(computation, params)
 	params = inf.KernelParams:new(params)
-	local diffusionKernel = CompiledHMCKernel:new(params.cacheSize)
+	local diffusionKernel = CompiledHMCKernel:new(params.cacheSize, HMCKernelTypes.NUTS)
 	return inf.LARJMCMC(computation, diffusionKernel, params)
 end
 
 local function HMC(computation, params)
 	params = inf.KernelParams:new(params)
 	return inf.mcmc(computation,
-					HMCKernel:new(),
+					HMCKernel:new(HMCKernelTypes.Langevin, params.numHMCSteps, params.partialMomentumAlpha),
 					params)
 end
 
 local function LARJHMC(computation, params)
 	params = inf.KernelParams:new(params)
-	local diffusionKernel = HMCKernel:new()
+	local diffusionKernel = HMCKernel:new(HMCKernelTypes.Langevin, params.numHMCSteps, params.partialMomentumAlpha)
 	return inf.LARJMCMC(computation, diffusionKernel, params)
+end
+
+local function T3HMC(computation, params)
+	params = inf.KernelParams:new(params)
+	local oracleKernel = HMCKernel:new(HMCKernelTypes.NUTS, params.numHMCSteps, params.partialMomentumAlpha)
+	return inf.mcmc(computation,
+					inf.MultiKernel:new({
+						oracleKernel,
+						T3Kernel:new(params.numT3Steps, params.globalTempMult, oracleKernel)
+					},
+					{"Diffusion", "T3"},
+					{1.0-params.jumpFreq, params.jumpFreq}),
+					params)
 end
 
 -- Module exports
@@ -725,7 +913,8 @@ return
 	HMC_JIT = HMC_JIT,
 	LARJHMC_JIT = LARJHMC_JIT,
 	HMC = HMC,
-	LARJHMC = LARJHMC
+	LARJHMC = LARJHMC,
+	T3HMC = T3HMC
 }
 
 

@@ -751,6 +751,7 @@ return
 	KernelParams = KernelParams,
 	LARJInterpolationTrace = LARJInterpolationTrace,
 	RandomWalkKernel = RandomWalkKernel,
+	MultiKernel = MultiKernel,
 	LARJKernel = LARJKernel,
 	mcmc = mcmc,
 	traceMH = traceMH,

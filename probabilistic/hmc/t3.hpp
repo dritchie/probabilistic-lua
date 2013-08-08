@@ -79,8 +79,8 @@ namespace stan
       		// Number of leapfrog steps to take
       		int _L;
 
-      		// We may determine _L based on _avgdepth from this sampler
-      		stan::mcmc::nuts_diaggiven<BaseRNG>* _lengthOracle;
+      		// We may borrow certain stats from this sampler.
+      		stan::mcmc::ppl_hmc<BaseRNG>* _oracle;
 
       		// Indices of old/new variables in the extended variable space
       		std::vector<int> _oldVarIndices;
@@ -147,7 +147,7 @@ namespace stan
 				const std::vector<int>& params_i,
 				int L = 100,
 				double globalTempMult = 1.0,
-				stan::mcmc::nuts_diaggiven<BaseRNG>* lengthOracle = NULL,
+				stan::mcmc::ppl_hmc<BaseRNG>* oracle = NULL,
 				double epsilon = -1,
 				double epsilon_pm = 0.0,
 				bool epsilon_adapt = true,
@@ -165,7 +165,7 @@ namespace stan
 								base_rng),
 			_globalTempMult(globalTempMult),
 			_L(L),
-			_lengthOracle(lengthOracle)
+			_oracle(oracle)
 			{
 				this->adaptation_init(1.0);
 			}
@@ -194,17 +194,15 @@ namespace stan
 
 				double newlogp;
 
-				// Set _L based on the oracle, if we have one.
-				if (_lengthOracle != NULL)
-					_L = _lengthOracle->get_average_depth();
+				// TODO: Oracle-related stuff?
 
 				// Do leapfrog steps
-				std::vector<double> x_new(this->_x);
-				std::vector<double> g_new(this->_g);
 				double sqrtTempMult = sqrt(_globalTempMult);
 				for (unsigned int i = 0; i < _L; i++)
 				{
-					double alpha = ((double)i)/_L;
+					//this->_epsilon_last = 0.00001;
+					double alpha = ((double)i)/(_L-1);
+					//double alpha = 0.0;
 					model.setAlpha(alpha);
 					for (unsigned int i = 0; i < _oldVarIndices.size(); i++)
 						this->_inv_masses[_oldVarIndices[i]] = (1.0 - alpha);
@@ -212,11 +210,11 @@ namespace stan
 						this->_inv_masses[_newVarIndices[i]] = alpha;
 
 					newlogp = tempered_diag_leapfrog(this->_model, this->_z, this->_inv_masses,
-												     x_new, m, g_new, this->_epsilon_last,
+												     this->_x, m, this->_g, this->_epsilon_last,
 												     sqrtTempMult, 0, _L,
 										   		     this->_error_msgs, this->_output_msgs);
 				}
-				this->nfevals_plus_eq(1);
+				this->nfevals_plus_eq(_L);
 
 				// New Hamiltonian
 				double rvsKineticEnergy = 0.0;
@@ -245,7 +243,7 @@ namespace stan
 
 		        // Return the current state of things, storing
 		        // the kinetic energy difference in the sample's _logp field.
-				return mcmc::sample(this->_x, this->_z, rvsKineticEnergy - fwdKineticEnergy);
+				return mcmc::sample(this->_x, this->_z, -rvsKineticEnergy + fwdKineticEnergy);
 			}
 
 			virtual void write_sampler_param_names(std::ostream& o) {
