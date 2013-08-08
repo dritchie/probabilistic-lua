@@ -116,11 +116,11 @@ namespace stan
 	      	else
 	      		tcase = SecondHalf;
 
-	      	double mult = (tcase == SecondHalf ? sqrtTempMult : 1.0/sqrtTempMult);
+	      	double mult = (tcase == SecondHalf ? 1.0/sqrtTempMult : sqrtTempMult);
 	        for (size_t i = 0; i < m.size(); i++)
 	        {
 	          m[i] += 0.5 * epsilon * g[i];
-	          m[i] *= m[i];
+	          m[i] *= mult;
 	      	}
 	        for (size_t i = 0; i < x.size(); i++)
 	          x[i] += epsilon * inv_masses[i] * m[i];
@@ -131,7 +131,7 @@ namespace stan
 	          write_error_msgs(error_msgs,e);
 	          logp = -std::numeric_limits<double>::infinity();
 	        }
-	        mult = (tcase == FirstHalf ? 1.0/sqrtTempMult : sqrtTempMult);
+	        mult = (tcase == FirstHalf ? sqrtTempMult : 1.0/sqrtTempMult);
 	        for (size_t i = 0; i < m.size(); i++)
 	        {
 	          m[i] += 0.5 * epsilon * g[i];
@@ -174,8 +174,6 @@ namespace stan
 
 			virtual sample next_impl()
 			{
-				this->_epsilon_last = this->_epsilon;
-
 				InterpolatedFunctionPointerModel& model = (InterpolatedFunctionPointerModel&)this->_model;
 
 				// Assumes that 'reset_inv_masses' has been called prior to this.
@@ -194,7 +192,13 @@ namespace stan
 
 				double newlogp;
 
-				// TODO: Oracle-related stuff?
+				// // TODO: Oracle-related stuff?
+				// if (_oracle != NULL) 
+				// 	this->_epsilon = _oracle->get_epsilon();
+
+				this->_epsilon_last = this->_epsilon;
+				//this->_epsilon_last = 0.02;
+				//printf("epsilon: %g                   \n", this->_epsilon);
 
 				// Do leapfrog steps
 				double sqrtTempMult = sqrt(_globalTempMult);
@@ -213,6 +217,10 @@ namespace stan
 												     this->_x, m, this->_g, this->_epsilon_last,
 												     sqrtTempMult, 0, _L,
 										   		     this->_error_msgs, this->_output_msgs);
+
+					// newlogp = ppl_hmc<>::diag_leapfrog(this->_model, this->_z, this->_inv_masses,
+					// 								   this->_x, m, this->_g, this->_epsilon_last,
+					// 						   		   this->_error_msgs, this->_output_msgs);
 				}
 				this->nfevals_plus_eq(_L);
 

@@ -90,6 +90,11 @@ namespace stan {
 			{
 				this->_logp = this->_model.grad_log_prob(this->_x,this->_z,this->_g);
 			}
+
+			double get_epsilon()
+			{
+				return this->_epsilon;
+			}
 		};
 	}
 }

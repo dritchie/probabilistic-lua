@@ -172,7 +172,7 @@ end
 local numsamps = 5000
 local annealIntervals = 100
 local annealSteps = 1
-local globalTempMult = 0.99
+local globalTempMult = 1.0
 --local globalTempMult = 1.0
 local dots = 4
 local dims = {4, 5, 6, 7, 8}
