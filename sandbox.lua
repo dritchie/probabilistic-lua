@@ -187,10 +187,10 @@ local t11 = os.clock()
 --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJDriftMH, {numsamps=numsamps, verbose=true, annealIntervals=annealIntervals, annealStepsPerInterval=annealSteps, globalTempMult=globalTempMult, jumpFreq=0.01, defaultBandwidth=0.25})
 
 ---- HMC ----
---res = MAP(makeFixedDimensionProgram(dots,fweight), HMC, {numsamps=numsamps, verbose=true})
---res = MAP(makeTransdimensionalProgram(dims,fweight), LARJHMC, {numsamps=numsamps, jumpFreq=0.01, verbose=true})
---res = MAP(makeTransdimensionalProgram(dims,fweight), LARJHMC, {numsamps=numsamps, annealIntervals=annealIntervals, annealStepsPerInterval=annealSteps, globalTempMult=globalTempMult, jumpFreq=0.01, verbose=true})
-res = MAP(makeTransdimensionalProgram(dims,fweight), T3HMC, {numsamps=numsamps, numT3Steps=annealIntervals, globalTempMult=globalTempMult, jumpFreq=0.01, verbose=true})
+--res = MAP(makeFixedDimensionProgram(dots,fweight), LMC, {numsamps=numsamps, verbose=true})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJLMC, {numsamps=numsamps, jumpFreq=0.01, verbose=true})
+--res = MAP(makeTransdimensionalProgram(dims,fweight), LARJLMC, {numsamps=numsamps, annealIntervals=annealIntervals, annealStepsPerInterval=annealSteps, globalTempMult=globalTempMult, jumpFreq=0.01, verbose=true})
+res = MAP(makeTransdimensionalProgram(dims,fweight), T3HMC, {numsamps=numsamps, T3StepSize=0.02, numT3Steps=annealIntervals, globalTempMult=globalTempMult, jumpFreq=0.01, verbose=true})
 local t12 = os.clock()
 
 

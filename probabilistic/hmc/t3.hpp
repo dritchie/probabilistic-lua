@@ -197,8 +197,7 @@ namespace stan
 				// 	this->_epsilon = _oracle->get_epsilon();
 
 				this->_epsilon_last = this->_epsilon;
-				//this->_epsilon_last = 0.02;
-				//printf("epsilon: %g                   \n", this->_epsilon);
+				printf("epsilon: %g                   \n", this->_epsilon);
 
 				// Do leapfrog steps
 				double sqrtTempMult = sqrt(_globalTempMult);

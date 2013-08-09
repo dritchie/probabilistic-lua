@@ -678,24 +678,52 @@ function HMCKernel:tellLARJStatus(alpha, oldVarNames, newVarNames)
 end
 
 
+-- HMC kernels for each type of HMC sampler we have
+local HMCKernel_Langevin = {}
+local HMCKernel_NUTS = {}
+local HMCKernel_HMC = {}
+setmetatable(HMCKernel_Langevin, {__index = HMCKernel})
+setmetatable(HMCKernel_NUTS, {__index = HMCKernel})
+setmetatable(HMCKernel_HMC, {__index = HMCKernel})
+function HMCKernel_Langevin:new(partialMomentumAlpha)
+	local newobj = HMCKernel:new(HMCKernelTypes.Langevin, 0, partialMomentumAlpha)
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+function HMCKernel_NUTS:new()
+	local newobj = HMCKernel:new(HMCKernelTypes.NUTS, 0, 0)
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+function HMCKernel_HMC:new(numSteps)
+	local newobj = HMCKernel:new(HMCKernelTypes.HMC, numSteps, 0)
+	setmetatable(newobj, self)
+	self.__index = self
+	return newobj
+end
+
+
 -- MCMC kernel that does dimension jumps via
 -- Transdimensional Tempered Trajectories (T3)
 local T3Kernel = {}
 
 -- Default parameters
 inf.KernelParams.numT3Steps = 100
+inf.KernelParams.T3StepSize = -1.0
 inf.KernelParams.globalTempMult = 1.0
 
 -- WTF doesn't Sublime syntax highlight this correctly? Looks like there's a bug in the
 -- language definition pertaining to method tables with numbers in their names...
-function T3Kernel:new(numSteps, globalTempMult, oracleKernel)
+function T3Kernel:new(numSteps, stepSize, globalTempMult, oracleKernel)
 	local lo = nil
 	if oracleKernel then
 		lo = oracleKernel.sampler
 	end
 	local newobj = 
 	{
-		sampler = hmc.T3_newSampler(numSteps, globalTempMult, lo),
+		sampler = hmc.T3_newSampler(numSteps, stepSize, globalTempMult, lo),
 		proposalsAccepted = 0,
 		proposalsMade = 0
 	}
@@ -879,26 +907,40 @@ local function LARJHMC_JIT(computation, params)
 	return inf.LARJMCMC(computation, diffusionKernel, params)
 end
 
-local function HMC(computation, params)
+local function LMC(computation, params)
 	params = inf.KernelParams:new(params)
 	return inf.mcmc(computation,
-					HMCKernel:new(HMCKernelTypes.Langevin, params.numHMCSteps, params.partialMomentumAlpha),
+					HMCKernel_Langevin:new(params.partialMomentumAlpha),
 					params)
 end
 
-local function LARJHMC(computation, params)
+local function LARJLMC(computation, params)
 	params = inf.KernelParams:new(params)
-	local diffusionKernel = HMCKernel:new(HMCKernelTypes.Langevin, params.numHMCSteps, params.partialMomentumAlpha)
+	local diffusionKernel = HMCKernel_Langevin:new(params.partialMomentumAlpha)
 	return inf.LARJMCMC(computation, diffusionKernel, params)
+end
+
+local function NUTS(computation, params)
+	params = inf.KernelParams:new(params)
+	return inf.mcmc(computation,
+					HMCKernel_NUTS:new(),
+					params)
+end
+
+local function HMC(computation, params)
+	params = inf.KernelParams:new(params)
+	return inf.mcmc(computation,
+					HMCKernel_HMC:new(params.numHMCSteps),
+					params)
 end
 
 local function T3HMC(computation, params)
 	params = inf.KernelParams:new(params)
-	local oracleKernel = HMCKernel:new(HMCKernelTypes.NUTS, params.numHMCSteps, params.partialMomentumAlpha)
+	local oracleKernel = HMCKernel_NUTS:new()
 	return inf.mcmc(computation,
 					inf.MultiKernel:new({
 						oracleKernel,
-						T3Kernel:new(params.numT3Steps, params.globalTempMult, oracleKernel)
+						T3Kernel:new(params.numT3Steps, params.T3StepSize, params.globalTempMult, oracleKernel)
 					},
 					{"Diffusion", "T3"},
 					{1.0-params.jumpFreq, params.jumpFreq}),
@@ -912,8 +954,10 @@ return
 	LARJDriftMH_JIT = LARJDriftMH_JIT,
 	HMC_JIT = HMC_JIT,
 	LARJHMC_JIT = LARJHMC_JIT,
+	LMC = LMC,
+	NUTS = NUTS,
 	HMC = HMC,
-	LARJHMC = LARJHMC,
+	LARJLMC = LARJLMC,
 	T3HMC = T3HMC
 }
 

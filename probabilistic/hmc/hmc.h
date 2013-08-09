@@ -31,7 +31,7 @@ void HMC_recomputeLogProb(struct HMC_SamplerState* s);
 /* Interface to the T3 sampler */
 struct T3_SamplerState;
 // 'oracle' is another sampler we can use to get e.g. step size info.
-struct T3_SamplerState* T3_newSampler(int steps, double globalTempMult, struct HMC_SamplerState* oracle);
+struct T3_SamplerState* T3_newSampler(int steps, double stepSize, double globalTempMult, struct HMC_SamplerState* oracle);
 void T3_deleteSampler(struct T3_SamplerState* s);
 void T3_setLogprobFunctions(struct T3_SamplerState* s, LogProbFunction lpfn1, LogProbFunction lpfn2);
 // Returns the kinetic energy difference (necessary for acceptance criterion)
