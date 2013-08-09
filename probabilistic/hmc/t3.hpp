@@ -36,11 +36,14 @@ public:
 	LogProbFunction lpfn1;
 	LogProbFunction lpfn2;
 	double alpha;
+	double globalTemp;
 	InterpolatedFunctionPointerModel() :
-		stan::model::prob_grad_ad(0), lpfn1(NULL), lpfn2(NULL), alpha(0.0) {}
+		stan::model::prob_grad_ad(0), lpfn1(NULL), lpfn2(NULL),
+		alpha(0.0), globalTemp(1.0) {}
 	void setLogprobFunctions(LogProbFunction lp1, LogProbFunction lp2)
 	{ lpfn1 = lp1; lpfn2 = lp2; }
 	void setAlpha(double a) { alpha = a; }
+	void setGlobalTemp(double t) { globalTemp = t; }
 	virtual stan::agrad::var log_prob(std::vector<stan::agrad::var>& params_r, 
 			                  std::vector<int>& params_i,
 			                  std::ostream* output_stream = 0)
@@ -50,7 +53,7 @@ public:
 		num lp2 = lpfn2(params);
 		stan::agrad::var interp = (1.0-alpha) * (*((stan::agrad::var*)&lp1)) +
 					 alpha * (*((stan::agrad::var*)&lp2));
-		return interp;
+		return globalTemp * interp;
 	}
 	virtual double grad_log_prob(std::vector<double>& params_r, 
                                    std::vector<int>& params_i, 
@@ -197,29 +200,34 @@ namespace stan
 				// 	this->_epsilon = _oracle->get_epsilon();
 
 				this->_epsilon_last = this->_epsilon;
-				printf("epsilon: %g                   \n", this->_epsilon);
 
 				// Do leapfrog steps
+				double globalTemp = 1.0;
 				double sqrtTempMult = sqrt(_globalTempMult);
 				for (unsigned int i = 0; i < _L; i++)
 				{
-					//this->_epsilon_last = 0.00001;
 					double alpha = ((double)i)/(_L-1);
-					//double alpha = 0.0;
 					model.setAlpha(alpha);
+
 					for (unsigned int i = 0; i < _oldVarIndices.size(); i++)
 						this->_inv_masses[_oldVarIndices[i]] = (1.0 - alpha);
 					for (unsigned int i = 0; i < _newVarIndices.size(); i++)
 						this->_inv_masses[_newVarIndices[i]] = alpha;
 
-					newlogp = tempered_diag_leapfrog(this->_model, this->_z, this->_inv_masses,
-												     this->_x, m, this->_g, this->_epsilon_last,
-												     sqrtTempMult, 0, _L,
-										   		     this->_error_msgs, this->_output_msgs);
+					if (alpha <= 0.5)
+						globalTemp *= _globalTempMult;
+					else
+						globalTemp /= _globalTempMult;
+					model.setGlobalTemp(globalTemp);
 
-					// newlogp = ppl_hmc<>::diag_leapfrog(this->_model, this->_z, this->_inv_masses,
-					// 								   this->_x, m, this->_g, this->_epsilon_last,
-					// 						   		   this->_error_msgs, this->_output_msgs);
+					// newlogp = tempered_diag_leapfrog(this->_model, this->_z, this->_inv_masses,
+					// 							     this->_x, m, this->_g, this->_epsilon_last,
+					// 							     sqrtTempMult, 0, _L,
+					// 					   		     this->_error_msgs, this->_output_msgs);
+
+					newlogp = ppl_hmc<>::diag_leapfrog(this->_model, this->_z, this->_inv_masses,
+													   this->_x, m, this->_g, this->_epsilon_last,
+											   		   this->_error_msgs, this->_output_msgs);
 				}
 				this->nfevals_plus_eq(_L);
 

@@ -172,7 +172,7 @@ end
 local numsamps = 5000
 local annealIntervals = 100
 local annealSteps = 1
-local globalTempMult = 1.0
+local globalTempMult = 0.99
 --local globalTempMult = 1.0
 local dots = 4
 local dims = {4, 5, 6, 7, 8}
@@ -190,7 +190,7 @@ local t11 = os.clock()
 --res = MAP(makeFixedDimensionProgram(dots,fweight), LMC, {numsamps=numsamps, verbose=true})
 --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJLMC, {numsamps=numsamps, jumpFreq=0.01, verbose=true})
 --res = MAP(makeTransdimensionalProgram(dims,fweight), LARJLMC, {numsamps=numsamps, annealIntervals=annealIntervals, annealStepsPerInterval=annealSteps, globalTempMult=globalTempMult, jumpFreq=0.01, verbose=true})
-res = MAP(makeTransdimensionalProgram(dims,fweight), T3HMC, {numsamps=numsamps, T3StepSize=0.02, numT3Steps=annealIntervals, globalTempMult=globalTempMult, jumpFreq=0.01, verbose=true})
+res = MAP(makeTransdimensionalProgram(dims,fweight), T3HMC, {numsamps=numsamps, T3StepSize=0.03, numT3Steps=annealIntervals, globalTempMult=globalTempMult, jumpFreq=0.01, verbose=true})
 local t12 = os.clock()
 
 

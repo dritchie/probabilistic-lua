@@ -814,23 +814,23 @@ function T3Kernel:next(currState, hyperparams)
 	local acceptanceProb = self.newStructTrace.logprob - currState.logprob + rvsPropLP - fwdPropLP + kineticEnergyDiff
 	local accepted = self.newStructTrace.conditionsSatisfied and math.log(math.random()) < acceptanceProb
 
-	-- DEBUG output
-	print("=====================")
-	print(string.format("%d -> %d", #self.oldStructTrace:freeVarNames(false, true), #self.newStructTrace:freeVarNames(false, true)))
-	print("- - - - - - - - - ")
-	print("accepted:", accepted)
-	print("newStructTrace.logprob: ", self.newStructTrace.logprob)
-	print("currState.logprob:", currState.logprob)
-	print("rvsPropLP:", rvsPropLP)
-	print("log propsal prob:", v.erp:logProposalProb(propval, origval, v.params))
-	print("lpDiff:", self.oldStructTrace:lpDiff(self.newStructTrace))
-	print("log num vars:", math.log(newNumVars))
-	print("fwdPropLP:", fwdPropLP)
-	print(string.format("kineticEnergyDiff: %g", kineticEnergyDiff))
-	print(string.format("acceptanceProb: %g", acceptanceProb))
-	print(string.format("lpDiffWithoutT3: %g", newLpWithoutT3 - currState.logprob))
-	print(string.format("lpDiffWithT3: %g", self.newStructTrace.logprob - currState.logprob))
-	print(string.format("diffT3Made: %g", self.newStructTrace.logprob - newLpWithoutT3))
+	-- -- DEBUG output
+	-- print("=====================")
+	-- print(string.format("%d -> %d", #self.oldStructTrace:freeVarNames(false, true), #self.newStructTrace:freeVarNames(false, true)))
+	-- print("- - - - - - - - - ")
+	-- print("accepted:", accepted)
+	-- print("newStructTrace.logprob: ", self.newStructTrace.logprob)
+	-- print("currState.logprob:", currState.logprob)
+	-- print("rvsPropLP:", rvsPropLP)
+	-- print("log propsal prob:", v.erp:logProposalProb(propval, origval, v.params))
+	-- print("lpDiff:", self.oldStructTrace:lpDiff(self.newStructTrace))
+	-- print("log num vars:", math.log(newNumVars))
+	-- print("fwdPropLP:", fwdPropLP)
+	-- print(string.format("kineticEnergyDiff: %g", kineticEnergyDiff))
+	-- print(string.format("acceptanceProb: %g", acceptanceProb))
+	-- print(string.format("lpDiffWithoutT3: %g", newLpWithoutT3 - currState.logprob))
+	-- print(string.format("lpDiffWithT3: %g", self.newStructTrace.logprob - currState.logprob))
+	-- print(string.format("diffT3Made: %g", self.newStructTrace.logprob - newLpWithoutT3))
 
 	if accepted then
 		self.proposalsAccepted = self.proposalsAccepted + 1
