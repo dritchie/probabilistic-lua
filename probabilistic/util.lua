@@ -104,6 +104,14 @@ function M.copytablemembers(srctab, dsttab)
 	end
 end
 
+function M.jointables(t1, t2)
+	local res = M.copytable(t1)
+	for k,v in pairs(t2) do
+		res[k] = v
+	end
+	return res
+end
+
 function M.joinarrays(t1, t2)
 	local res = M.copytable(t1)
 	for i,v in ipairs(t2) do

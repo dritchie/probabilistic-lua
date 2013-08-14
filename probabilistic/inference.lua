@@ -132,6 +132,7 @@ local KernelParams =
 	-- Set up the default parameters expected by *any* MCMC algorithm
 	numsamps = 1000,
 	lag = 1,
+	burnin = 0,
 	verbose = false
 }
 
@@ -680,7 +681,7 @@ local function mcmc(computation, kernel, kernelparams)
 			io.flush()
 		end
 		currentState = kernel:next(currentState)
-		if i % kernelparams.lag == 0 then
+		if i % kernelparams.lag == 0  and i > kernelparams.burnin then
 			table.insert(samps, currentState)
 		end
 	end
