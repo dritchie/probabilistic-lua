@@ -3,7 +3,7 @@ local ffi = require("ffi")
 
 local unaryOps = 
 {
-	{"negate", "-"}
+	{"unm", "-"}
 }	
 local unaryFns = 
 {
