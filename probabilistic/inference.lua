@@ -41,7 +41,7 @@ end
 -- Maximum a posteriori inference (returns the highest probability sample)
 local function MAP(computation, samplingFn, params)
 	local samps = samplingFn(computation, params)
-	local maxelem = {sample = nil, logprob = -math.huge}
+	local maxelem = {returnValue = nil, logprob = -math.huge}
 	for i,s in ipairs(samps) do
 		if s.logprob > maxelem.logprob then
 			maxelem = s
