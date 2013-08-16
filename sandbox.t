@@ -172,15 +172,34 @@
 
 --------------------------
 
-random = require("probabilistic.random")
-hmc = terralib.require("probabilistic.hmc")
-mean = 0.1
-sd = 0.5
-print(random.gaussian_logprob(0.2, mean, sd))
-print(math.sqrt(354))
-hmc.toggleLuaAD(true)
-print(hmc.getValue(random.gaussian_logprob(hmc.makeNum(0.2), hmc.makeNum(mean), hmc.makeNum(sd))))
-print(hmc.getValue(math.sqrt(hmc.makeNum(354))))
+-- random = require("probabilistic.random")
+-- hmc = terralib.require("probabilistic.hmc")
+-- mean = 0.1
+-- sd = 0.5
+-- print(random.gaussian_logprob(0.2, mean, sd))
+-- print(math.sqrt(354))
+-- hmc.toggleLuaAD(true)
+-- print(hmc.getValue(random.gaussian_logprob(hmc.makeNum(0.2), hmc.makeNum(mean), hmc.makeNum(sd))))
+-- print(hmc.getValue(math.sqrt(hmc.makeNum(354))))
+
+local Foo = terralib.includecstring[[
+double foo(double d)
+{
+	return 2.0*d;
+}
+
+typedef struct
+{
+	double d;
+} Foo;
+
+Foo foo(Foo f)
+{
+	Foo retf;
+	retf.d = 2.0*f.d;
+	return retf;
+}
+]]
 
 
 

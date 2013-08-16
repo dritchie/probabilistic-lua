@@ -275,7 +275,7 @@ end
 
 math.randomseed(os.time())
 
-local circles = MAP(generate, LARJTraceMH, {numsamps=10000, annealIntervals=0, globalTempMult=0.99, jumpFreq=0.05, verbose=true})
+local circles = MAP(generate, LARJTraceMH, {numsamps=20000, annealIntervals=0, globalTempMult=0.99, jumpFreq=0.05, verbose=true})
 --local circles = MAP(generate, T3HMC, {numsamps=1000, numT3Steps=100, T3StepSize=0.01, globalTempMult=0.99, jumpFreq=0.05, verbose=true})
 print(string.format("numCircles: %d", #circles))
 renderbuffer_normal:clear()
