@@ -218,14 +218,14 @@ local function render(circles, fb, doSmoothing, fieldSmoothing, minMaxSmoothing)
 end
 
 
-local targetMask = Framebuffer:newFromMaskImage("test/mask_square_small.png")
+local targetMask = Framebuffer:newFromMaskImage("test/mask_small.png")
 targetMask:invert()
 
 local renderbuffer_normal = Framebuffer:new(double, targetMask.width, targetMask.height, 0.0)
 local renderbuffer_hmc = Framebuffer:new(hmc.num, targetMask.width, targetMask.height, hmc.makeNum(0.0))
 
 local minMaxSmoothing = 200
-local fieldSmoothing = 0.005
+local fieldSmoothing = 0.0025
 
 local function chooseRenderbuffer(number)
 	if type(number) == "number" then
@@ -238,15 +238,15 @@ end
 local function generate()
 
 	-- Params
-	local numCircles_poissonLambda = 10
+	local numCircles_poissonLambda = 40
 	local pos_min = 0.0
 	local pos_max = 1.0
 	-- local radius_betaAlpha = 2.0
 	-- local radius_betaBeta = 5.0
 	-- local radius_mult = 0.2
-	local radius_min = 0.01
-	local radius_max = 0.3
-	local constraintTightness = 1.0
+	local radius_min = 0.005
+	local radius_max = 0.05
+	local constraintTightness = 0.1
 
 	-- Prior
 	local numCircles = poisson({numCircles_poissonLambda}, {isStructural=true})
@@ -261,8 +261,8 @@ local function generate()
 	if numCircles > 0 then
 		local renderbuffer = chooseRenderbuffer(circles[1].x)
 		renderbuffer:clear()
-		render(circles, renderbuffer, true, fieldSmoothing, minMaxSmoothing)
-		--render(circles, renderbuffer, false)
+		--render(circles, renderbuffer, true, fieldSmoothing, minMaxSmoothing)
+		render(circles, renderbuffer, false)
 		local targetDist = renderbuffer:distanceFrom(targetMask)
 		factor(-targetDist/constraintTightness)
 	end
@@ -275,13 +275,14 @@ end
 
 math.randomseed(os.time())
 
-local circles = MAP(generate, LARJTraceMH, {numsamps=1000, annealIntervals=0, globalTempMult=0.99, jumpFreq=0.05, verbose=true})
+local circles = MAP(generate, LARJTraceMH, {numsamps=10000, annealIntervals=0, globalTempMult=0.99, jumpFreq=0.05, verbose=true})
+--local circles = MAP(generate, T3HMC, {numsamps=1000, numT3Steps=100, T3StepSize=0.01, globalTempMult=0.99, jumpFreq=0.05, verbose=true})
 print(string.format("numCircles: %d", #circles))
+renderbuffer_normal:clear()
+render(circles, renderbuffer_normal, true, fieldSmoothing, minMaxSmoothing)
+renderbuffer_normal:invert()
+renderbuffer_normal:saveToPNGImage("test/output_smooth.png")
 local finalbuffer = Framebuffer:new(double, 500, 500, 0.0)
-render(circles, finalbuffer, true, fieldSmoothing, minMaxSmoothing)
-finalbuffer:invert()
-finalbuffer:saveToPNGImage("test/output_smooth.png")
-finalbuffer:clear()
 render(circles, finalbuffer, false)
 finalbuffer:invert()
 finalbuffer:saveToPNGImage("test/output.png")
