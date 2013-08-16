@@ -457,65 +457,6 @@ mhtest(
 	end,
 	0.75)
 
-
--- Terra-related tests
-
-if terralib then
-
-	local function fixedStructureDriftTest(name, sampler)
-		customtest(
-			name,
-			function()
-				return gaussian({0.1, 0.5})
-			end,
-			0.1,
-			errorTolerance,
-			sampler,
-			{numsamps=samples, lag=lag, defaultBandwidth=0.5, verbose=false})
-	end
-	fixedStructureDriftTest("fixed-structure gaussian drift", driftMH)
-	fixedStructureDriftTest("compiled fixed-structure gaussian drift", driftMH_JIT)
-
-	local function jumpDrift(name, sampler)
-		customtest(
-			name,
-			function()
-				local num = uniformDraw({1, 2}, {isStructural=true})
-				local gs = {}
-				for i=1,num do
-					table.insert(gs, gaussian({0.1, 0.5}))
-				end
-				return gs[1]
-			end, 
-			0.1,
-			errorTolerance,
-			sampler,
-			{numsamps=samples, lag=lag, defaultBandwidth=0.5, verbose=false})
-	end
-	jumpDrift("trans-dimensional gaussian drift (no annealing)", LARJDriftMH)
-	jumpDrift("compiled trans-dimensional gaussian drift (no annealing)", LARJDriftMH_JIT)
-
-	local function larjDrift(name, sampler)
-		customtest(
-			name,
-			function()
-				local num = uniformDraw({1, 2}, {isStructural=true})
-				local gs = {}
-				for i=1,num do
-					table.insert(gs, gaussian({0.1, 0.5}))
-				end
-				return gs[1]
-			end, 
-			0.1,
-			errorTolerance,
-			sampler,
-			{numsamps=samples, lag=lag, annealIntervals=larjAnnealSteps, defaultBandwidth=0.5, verbose=false})
-	end
-	larjDrift("trans-dimensional gaussian drift (with annealing)", LARJDriftMH)
-	larjDrift("compiled trans-dimensional gaussian drift (with annealing)", LARJDriftMH_JIT)
-
-end
-
 print("tests done!")
 
 local t2 = os.clock()
