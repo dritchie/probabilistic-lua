@@ -4,9 +4,7 @@ table.insert(submodules, require("probabilistic.erp"))
 table.insert(submodules, require("probabilistic.inference"))
 table.insert(submodules, require("probabilistic.control"))
 table.insert(submodules, require("probabilistic.memoize"))
-if terralib then
-	table.insert(submodules, terralib.require("probabilistic.compiledInference"))
-end
+table.insert(submodules, require("probabilistic.temperedTransitions"))
 
 local M = {}
 
