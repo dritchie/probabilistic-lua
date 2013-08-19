@@ -31,6 +31,46 @@ local function mean(values)
 	return m / n
 end
 
+local function variance(values)
+	local mu = mean(values)
+	local n = table.getn(values)
+	local var = 0	
+	for i=1,n do
+		var = var + (values[i] - mu) ^ 2
+	end
+	return var / n
+end
+
+local function autocorrelation(values)
+	local n = table.getn(values)
+
+	local mu = mean(values)
+	local var = variance(values)
+
+	local autocor_dist = {}
+
+	for lag=1,n do
+		autocor = 0 
+		for t=1,n-lag do
+			autocor = autocor + (values[t] - mu) * (values[t+lag] - mu)
+		end
+		autocor = autocor / n / var
+		autocor_dist[lag] = autocor
+	end
+
+	return autocor_dist
+end
+
+local function autoCorrelationArea(values)
+	local dist = autocorrelation(values)
+	local n = table.getn(values)
+	local area = 0
+	for i=1,n do
+		area = area + math.abs(dist[i])
+	end
+	return area
+end
+
 -- Compute the expected value of a computation
 -- Only appropraite for computations whose return value is a number or overloads + and /
 local function expectation(computation, samplingFn, params)
@@ -746,6 +786,7 @@ return
 {
 	distrib = distrib,
 	mean = mean,
+	variance = variance,
 	expectation = expectation,
 	MAP = MAP,
 	rejectionSample = rejectionSample,
