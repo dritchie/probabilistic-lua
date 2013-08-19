@@ -21,14 +21,14 @@ local function distrib(computation, samplingFn, params)
 	return hist
 end
 
--- Compute the mean of a set of values
 local function mean(values)
 	local m = values[1]
 	local n = table.getn(values)
 	for i=2,n do
 		m = m + values[i]
 	end
-	return m / n
+	local retVal =  m / n
+	return retVal
 end
 
 local function variance(values)
@@ -36,7 +36,8 @@ local function variance(values)
 	local n = table.getn(values)
 	local var = 0	
 	for i=1,n do
-		var = var + (values[i] - mu) ^ 2
+		local diff = (values[i] - mu)
+		var = var + diff*diff
 	end
 	return var / n
 end
