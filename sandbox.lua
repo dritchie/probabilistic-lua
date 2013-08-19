@@ -42,13 +42,53 @@ local function scheduleGen(annealStep, numAnnealSteps)
 	return val
 end
 
+local function variance(values)
+	local mu = mean(values)
+	local n = table.getn(values)
+	local var = 0	
+	for i=1,n do
+		var = var + (values[i] - mu) ^ 2
+	end
+	return var / n
+end
+
+local function getAutoCorrelationDist(values)
+	local n = table.getn(values)
+
+	local mu = mean(values)
+	local var = variance(values)
+
+	local autocor_dist = {}
+
+	for lag=1,n do
+		autocor = 0 
+		for t=1,n-lag do
+			autocor = autocor + (values[t] - mu) * (values[t+lag] - mu)
+		end
+		autocor = autocor / n / var
+		autocor_dist[lag] = autocor
+	end
+
+	return autocor_dist
+end
+
+local function getAutoCorrelationArea(values)
+	local dist = getAutoCorrelationDist(values)
+	local n = table.getn(values)
+	local area = 0
+	for i=1,n do
+		area = area + math.abs(dist[i])
+	end
+	return area
+end
+
 --------------------------------
 
 print("------------------")
 
 math.randomseed(os.time())
 
-local numsamps = 10000
+local numsamps = 1000
 local lag = 1
 local verbose = true
 
@@ -56,14 +96,21 @@ local annealIntervals = 100
 local temperedTransitionsFreq = 0.5
 
 -- Normal inference
-local e_normal = expectation(program, traceMH,
-	{numsamps=numsamps, lag=lag, verbose=verbose})
+local samps_normal = util.map(function(s) return s.returnValue end,
+	traceMH(program, {numsamps=numsamps, lag=lag, verbose=verbose}))
+local e_normal = mean(samps_normal)
+local aca_normal = getAutoCorrelationArea(samps_normal)
 print(string.format("NORMAL INFERENCE: %g", e_normal))
+print(string.format("Autocorrelation area of samples: %g", aca_normal))
 
-print("------------------")
+-- print("------------------")
 
 -- Tempered inference
-local e_tempered = expectation(program, TemperedTraceMH,
-	{scheduleGenerator=scheduleGen, temperedTransitionsFreq=temperedTransitionsFreq,
-	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose})
+local samps_tempered = util.map(function(s) return s.returnValue end,
+	TemperedTraceMH(program,{scheduleGenerator=scheduleGen, temperedTransitionsFreq=temperedTransitionsFreq,
+	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
+local e_tempered = mean(samps_tempered)
+local aca_tempered = getAutoCorrelationArea(samps_tempered)
 print(string.format("TEMPERED INFERENCE: %g", e_tempered))
+print(string.format("Autocorrelation area of samples: %g", aca_tempered))
+
