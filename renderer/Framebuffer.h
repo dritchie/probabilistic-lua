@@ -4,11 +4,15 @@
 #include "FreeImage.h"
 #include <cmath>
 #include <cassert>
+#include <algorithm>
 
 template <class Real>
 class Framebuffer
 {
 public:
+
+	// May be specialized
+	static int toInt(Real r) { return (int)r; }
 
 	static inline void setLessThanZeroErrorColor(RGBQUAD* rgb)
 	{
@@ -41,13 +45,13 @@ public:
 
 	static inline int quantize(Real val)
 	{
-		return floor(val);
+		return toInt(floor(val));
 	}
 
 	Framebuffer(int w, int h, Real clearVal)
 	: width(w), height(h), clearValue(clearVal)
 	{
-		buffer = new (Real*)[height];
+		buffer = new Real*[height];
 		for (int hh = 0; hh < height; hh++)
 		{
 			buffer[hh] = new Real[width];
@@ -56,14 +60,14 @@ public:
 		}
 	}
 
-	static newFromMaskImage(char* filename)
+	static Framebuffer<Real>* newFromMaskImage(char* filename, Real clearVal)
 	{
 		FIBITMAP* img = FreeImage_Load(FIF_PNG, filename, PNG_DEFAULT);
-		Framebuffer<Real>* fb = new Framebuffer<Real>(FreeImage_GetWidth(img), FreeImage_GetHeight(img), 0.0);
+		Framebuffer<Real>* fb = new Framebuffer<Real>(FreeImage_GetWidth(img), FreeImage_GetHeight(img), clearVal);
 		RGBQUAD rgb;
-		for (int y = 0; h < height; y++)
+		for (int y = 0; y < fb->height; y++)
 		{
-			for (int x = 0; x < widht; x++)
+			for (int x = 0; x < fb->width; x++)
 			{
 				FreeImage_GetPixelColor(img, x, y, &rgb);
 				fb->buffer[y][x] = deQuantize(rgb.rgbRed);
@@ -77,9 +81,9 @@ public:
 	{
 		FIBITMAP* img = FreeImage_Allocate(width, height, 24, 0, 0, 0);
 		RGBQUAD rgb;
-		for (int y = 0; h < height; y++)
+		for (int y = 0; y < height; y++)
 		{
-			for (int x = 0; x < widht; x++)
+			for (int x = 0; x < width; x++)
 			{
 				Real val = buffer[y][x];
 				if (val < 0.0)
@@ -108,9 +112,9 @@ public:
 
 	void clear()
 	{
-		for (int y = 0; h < height; y++)
+		for (int y = 0; y < height; y++)
 		{
-			for (int x = 0; x < widht; x++)
+			for (int x = 0; x < width; x++)
 			{
 				buffer[y][x] = clearValue;
 			}
@@ -119,22 +123,22 @@ public:
 
 	void invert()
 	{
-		for (int y = 0; h < height; y++)
+		for (int y = 0; y < height; y++)
 		{
-			for (int x = 0; x < widht; x++)
+			for (int x = 0; x < width; x++)
 			{
 				buffer[y][x] = 1.0 - buffer[y][x];
 			}
 		}
 	}
 
-	void distanceFrom(Framebuffer<Real>* other)
+	Real distanceFrom(Framebuffer<Real>* other)
 	{
 		assert(width == other->width && height == other->height);
 		Real dist = 0.0;
-		for (int y = 0; h < height; y++)
+		for (int y = 0; y < height; y++)
 		{
-			for (int x = 0; x < widht; x++)
+			for (int x = 0; x < width; x++)
 			{
 				Real diff = buffer[y][x] - other->buffer[y][x];
 				dist += diff*diff;
@@ -149,9 +153,6 @@ public:
 		Real ydiff = y - yc;
 		return xdiff*xdiff + ydiff*ydiff - rc*rc;
 	}
-
-	// May be specialized
-	static int toInt(Real r) { return (int)r; }
 
 	static inline Real softmin(Real n, Real m, double alpha)
 	{
@@ -171,14 +172,14 @@ public:
 		double bbox_expand = sqrt(-fieldSmoothing * log(v_thresh));
 
 		// Iterate over all pixels potentially covered by this shape
-		Real xmin = x - r - bbox_expand;
-		Real xmax = x + r + bbox_expand;
-		Real ymin = y - r - bbox_expand;
-		Real ymax = y + r + bbox_expand;
-		int xpixmin = toInt(xmin);
-		int xpixmax = toInt(xmax)+1;
-		int ypixmin = toInt(ymin);
-		int ypixmax = toInt(ymax)+1;
+		Real xmin = xc - rc - bbox_expand;
+		Real xmax = xc + rc + bbox_expand;
+		Real ymin = yc - rc - bbox_expand;
+		Real ymax = yc + rc + bbox_expand;
+		int xpixmin = std::max(0, toInt(xmin));
+		int xpixmax = std::min(width, toInt(xmax)+1);
+		int ypixmin = std::max(0, toInt(ymin));
+		int ypixmax = std::min(height, toInt(ymax)+1);
 		for (int y = ypixmin; y < ypixmax; y++)
 		{
 			Real ypoint = (y + 0.5)/height;
@@ -203,9 +204,9 @@ public:
 
 	}
 
-	inline int getWidth { return width; }
+	inline int getWidth() { return width; }
 
-	inline int getHeight { return height; }
+	inline int getHeight() { return height; }
 
 private:
 	int width;

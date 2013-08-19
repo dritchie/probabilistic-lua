@@ -5,8 +5,8 @@ SO=librender.so
 FREEIMAGE_HDIR=/opt/local/include
 FREEIMAGE_LDIR=/opt/local/lib
 
-CFLAGS=-I../probabilistic/hmc -I$(FREEIMAGE_HDIR)
-LDFLAGS=-L$(FREEIMAGE_LDIR) -lfreeimage
+CFLAGS=-I../probabilistic/hmc -I$(FREEIMAGE_HDIR) -I$(STAN_ROOT)/src
+LDFLAGS=-L$(FREEIMAGE_LDIR) -L../probabilistic/hmc -lfreeimage -lhmc
 
 CPP=\
 	doubleImplementation.cpp \
@@ -19,10 +19,8 @@ all: $(SO)
 clean:
 	rm -f *.o *.so
 
-clang++ -shared -O3 -I%s -I%s -I%s %s %s -o %s"
-
-SO: $(OBJ)
-	$(CC) -shared $(OBJ) -o $@
+$(SO): $(OBJ)
+	$(CC) -shared $(LDFLAGS) $(OBJ) -o $@
 
 %.o: %.cpp
-	$(CC) -O3 $(CFLAGS) $*.cpp -o $@
+	$(CC) -c -O3 $(CFLAGS) $*.cpp -o $@

@@ -13,17 +13,17 @@ FRAMEBUFFER_T;
 
 
 // Publicly visible functions
-FRAMEBUFFER_T* FRAMEBUFFER_new(int width, int height, NUMTYPE clearVal);
-FRAMEBUFFER_T* FRAMEBUFFER_newFromMaskImage(char* filename);
-void FRAMEBUFFER_saveToPNGImage(FRAMEBUFFER_T* fb, char* filename);
-void FRAMEBUFFER_clear(FRAMEBUFFER_T* fb);
-void FRAMEBUFFER_invert(FRAMEBUFFER_T* fb);
-void FRAMEBUFFER_delete(FRAMEBUFFER_T* fb);
-void FRAMEBUFFER_distance(FRAMEBUFFER_T* fb1, FRAMEBUFFER_T* fb2);
-void FRAMEBUFFER_renderCircle(FRAMEBUFFER_T* fb, NUMTYPE x, NUMTYPE y, NUMTYPE r,
+FRAMEBUFFER_T* CAT(FRAMEBUFFER, _new)(int width, int height, NUMTYPE clearVal);
+FRAMEBUFFER_T* CAT(FRAMEBUFFER, _newFromMaskImage)(char* filename, NUMTYPE clearVal);
+void CAT(FRAMEBUFFER, _saveToPNGImage)(FRAMEBUFFER_T* fb, char* filename);
+void CAT(FRAMEBUFFER, _clear)(FRAMEBUFFER_T* fb);
+void CAT(FRAMEBUFFER, _invert)(FRAMEBUFFER_T* fb);
+void CAT(FRAMEBUFFER, _delete)(FRAMEBUFFER_T* fb);
+NUMTYPE CAT(FRAMEBUFFER, _distance)(FRAMEBUFFER_T* fb1, FRAMEBUFFER_T* fb2);
+void CAT(FRAMEBUFFER, _renderCircle)(FRAMEBUFFER_T* fb, NUMTYPE x, NUMTYPE y, NUMTYPE r,
 	int doSmoothing, double fieldSmoothing, double minMaxSmoothing);
-int FRAMEBUFFER_width(FRAMEBUFFER_T* fb);
-int FRAMEBUFFER_height(FRAMEBUFFER_T* fb);
+int CAT(FRAMEBUFFER, _width)(FRAMEBUFFER_T* fb);
+int CAT(FRAMEBUFFER, _height)(FRAMEBUFFER_T* fb);
 
 
 #endif

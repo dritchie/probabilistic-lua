@@ -206,6 +206,10 @@ function M.wait(procstr)
 	io.popen(procstr):read("*all")
 end
 
+function M.capturingWait(procstr)
+	return io.popen(procstr):read("*all")
+end
+
 -- Rudimentary cumulative timer class
 M.Timer = {}
 
