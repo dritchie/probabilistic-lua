@@ -787,6 +787,8 @@ return
 	distrib = distrib,
 	mean = mean,
 	variance = variance,
+	autocorrelation = autocorrelation,
+	autoCorrelationArea = autoCorrelationArea,
 	expectation = expectation,
 	MAP = MAP,
 	rejectionSample = rejectionSample,
