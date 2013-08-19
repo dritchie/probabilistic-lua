@@ -20,6 +20,10 @@ local dualnumImpl = terralib.includecstring(string.format([[
 #define NUMTYPE num
 #include "%s"
 ]], numheader, ifaceHeader))
+local distImpl = terralib.includecstring(string.format([[
+#include "%s"
+]], sourcefile:gsub("init.t", "dist.h")),
+string.format("-I%s", sourcefile:gsub("init.t", "../probabilistic/hmc/")))
 
 -- Link the library
 local soname = sourcefile:gsub("init.t", "librender.so")
@@ -40,5 +44,11 @@ for name,val in pairs(dualnumImpl) do
 		M[actualName]:adddefinition(val:getdefinitions()[1])
 	end
 end
+
+-- Add extra overloads for the Framebuffer distance function.
+local d_n_dist = distImpl["Framebuffer_double_num_distance"]
+local n_d_dist = distImpl["Framebuffer_num_double_distance"]
+M["Framebuffer_distance"]:adddefinition(d_n_dist:getdefinitions()[1])
+M["Framebuffer_distance"]:adddefinition(n_d_dist:getdefinitions()[1])
 
 return M

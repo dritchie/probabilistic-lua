@@ -253,18 +253,21 @@ for i,v in ipairs(binaryFns) do
 end
 
 local _math = nil
+local _luaADon = false
 function hmc.toggleLuaAD(flag)
 	if flag then
+		_luaADon = true
 		_math = math
 		_G["math"] = admath
 	else
+		_luaADon = false
 		_G["math"] = _math
 		_math = nil
 	end
 end
-
-
-
+function hmc.luaADIsOn()
+	return _luaADon
+end
 
 return hmc
 

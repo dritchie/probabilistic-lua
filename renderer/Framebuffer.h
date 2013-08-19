@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cassert>
 #include <algorithm>
+#include <cstdio>
 
 template <class Real>
 class Framebuffer
@@ -13,6 +14,7 @@ public:
 
 	// May be specialized
 	static int toInt(Real r) { return (int)r; }
+	static double value(Real r) { return r; }
 
 	static inline void setLessThanZeroErrorColor(RGBQUAD* rgb)
 	{
@@ -45,7 +47,7 @@ public:
 
 	static inline int quantize(Real val)
 	{
-		return toInt(floor(val));
+		return toInt(floor(255*val));
 	}
 
 	Framebuffer(int w, int h, Real clearVal)
@@ -132,7 +134,8 @@ public:
 		}
 	}
 
-	Real distanceFrom(Framebuffer<Real>* other)
+	template<class Real2>
+	Real distanceFrom(Framebuffer<Real2>* other)
 	{
 		assert(width == other->width && height == other->height);
 		Real dist = 0.0;
@@ -169,24 +172,32 @@ public:
 	{
 		// How much do we need to expand the bounding box due to smoothing?
 		static const double v_thresh = 0.02;
-		double bbox_expand = sqrt(-fieldSmoothing * log(v_thresh));
+		double bbox_expand = 0.0;
+		if (doSmoothing)
+		{
+			bbox_expand = sqrt(-fieldSmoothing * log(v_thresh));
+			//printf("bbox_expand: %g\n", bbox_expand);
+		}
 
 		// Iterate over all pixels potentially covered by this shape
 		Real xmin = xc - rc - bbox_expand;
 		Real xmax = xc + rc + bbox_expand;
 		Real ymin = yc - rc - bbox_expand;
 		Real ymax = yc + rc + bbox_expand;
-		int xpixmin = std::max(0, toInt(xmin));
-		int xpixmax = std::min(width, toInt(xmax)+1);
-		int ypixmin = std::max(0, toInt(ymin));
-		int ypixmax = std::min(height, toInt(ymax)+1);
+		int xpixmin = std::max(0, toInt(width*xmin));
+		int xpixmax = std::min(width, toInt(width*xmax)+1);
+		int ypixmin = std::max(0, toInt(height*ymin));
+		int ypixmax = std::min(height, toInt(height*ymax)+1);
+		// printf("xmin: (%g) %d, xmax: (%g) %d, ymin: (%g) %d, ymax: (%g) %d\n",
+		// 	value(xmin), xpixmin, value(xmax), xpixmax,
+		// 	value(ymin), ypixmin, value(ymax), ypixmax);
 		for (int y = ypixmin; y < ypixmax; y++)
 		{
 			Real ypoint = (y + 0.5)/height;
 			for (int x = xpixmin; x < xpixmax; x++)
 			{
 				Real xpoint = (x + 0.5)/width;
-				Real f = circleFieldFunction(x, y, xc, yc, rc);
+				Real f = circleFieldFunction(xpoint, ypoint, xc, yc, rc);
 				if (doSmoothing)
 				{
 					Real currVal = buffer[y][x];
@@ -208,7 +219,8 @@ public:
 
 	inline int getHeight() { return height; }
 
-private:
+
+public:
 	int width;
 	int height;
 	Real clearValue;

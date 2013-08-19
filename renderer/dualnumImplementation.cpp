@@ -14,3 +14,5 @@ int Framebuffer<stan::agrad::var>::toInt(stan::agrad::var v)
 {
 	return (int)(v.val());
 }
+template<>
+double Framebuffer<stan::agrad::var>::value(stan::agrad::var r) { return r.val(); }
