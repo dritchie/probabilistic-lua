@@ -133,11 +133,27 @@ end
 
 -- For the time being, just a global annealing schedule
 -- (i.e. all temperatures adjusted in lockstep)
-local function scheduleGen_ising(annealStep, numAnnealSteps)
+local function scheduleGen_ising_global(annealStep, numAnnealSteps)
 	local a = annealStep/numAnnealSteps
 	--local val = 2.0*math.abs(a - 0.5)
 	local val = (2.0*a - 1); val = val*val
 	return replicate(numSites-1, function() return val end)
+end
+
+-- Generates a schedule that lowers site temperatures to 0 from left to right,
+-- then raises them back to 1 from right to left
+local function scheduleGen_ising_local_left_to_right(annealStep, numAnnealSteps)
+	local val = 2 * (math.abs(0.5 - (annealStep-1)/(numAnnealSteps-1))) * (numSites-1)
+	local decimal = val % 1
+	local schedule = {}
+	for i=1,val do
+		schedule[i] = 1
+	end
+	if (val - decimal + 1 < numSites) then schedule[val - decimal + 1] = decimal end
+	for i=val-decimal+2,numSites-1 do
+		schedule[i] = 0
+	end
+	return schedule
 end
 
 --------------------------------
@@ -148,7 +164,7 @@ end
 -- local program = gmm
 -- local scheduleGen = scheduleGen_gmm
 local program = ising
-local scheduleGen = scheduleGen_ising
+-- local scheduleGen = scheduleGen_ising_global
 
 
 print("------------------")
@@ -171,11 +187,20 @@ print(string.format("Autocorrelation area of samples: %g", aca_normal))
 
 print("------------------")
 
--- Tempered inference
-local samps_tempered = util.map(function(s) return s.returnValue end,
-	TemperedTraceMH(program, {scheduleGenerator=scheduleGen, temperedTransitionsFreq=temperedTransitionsFreq,
+-- Globally tempered inference
+local samps_globally_tempered = util.map(function(s) return s.returnValue end,
+	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
-local aca_tempered = autoCorrelationArea(samps_tempered)
-print("TEMPERED INFERENCE")
-print(string.format("Autocorrelation area of samples: %g", aca_tempered))
+local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
+print("GLOBALLY TEMPERED INFERENCE")
+print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
+
+-- Locally tempered inference
+local samps_locally_tempered = util.map(function(s) return s.returnValue end,
+	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_local_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
+	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
+local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
+print("LOCALLY TEMPERED INFERENCE")
+print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))
+
 
