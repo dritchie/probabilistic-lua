@@ -38,9 +38,7 @@ local function expectation(computation, samplingFn, params)
 	return mean(util.map(function(s) return s.returnValue end, samps))
 end
 
--- Maximum a posteriori inference (returns the highest probability sample)
-local function MAP(computation, samplingFn, params)
-	local samps = samplingFn(computation, params)
+local function sampleMAP(samps)
 	local maxelem = {returnValue = nil, logprob = -math.huge}
 	for i,s in ipairs(samps) do
 		if s.logprob > maxelem.logprob then
@@ -48,6 +46,12 @@ local function MAP(computation, samplingFn, params)
 		end
 	end
 	return maxelem.returnValue
+end
+
+-- Maximum a posteriori inference (returns the highest probability sample)
+local function MAP(computation, samplingFn, params)
+	local samps = samplingFn(computation, params)
+	return sampleMAP(samps)
 end
 
 -- Rejection sample a result from computation that satisfies all
@@ -747,6 +751,7 @@ return
 	distrib = distrib,
 	mean = mean,
 	expectation = expectation,
+	sampleMAP = sampleMAP,
 	MAP = MAP,
 	rejectionSample = rejectionSample,
 	KernelParams = KernelParams,

@@ -628,7 +628,7 @@ function HMCKernel:next(currState, hyperparams)
 	self.setNonStructValues(self.currentTrace, self.varVals)
 	self.currentTrace:flushLogProbs()
 
-	--print(self.currentTrace.logprob)
+	print(string.format("LP: %g | %s", self.currentTrace.logprob, accepted and "ACCEPT" or "REJECT"))
 
 	return self.currentTrace
 end
@@ -644,7 +644,6 @@ function HMCKernel:makeLogProbFn()
 		-- We return the inner implementation of the dual num, because
 		-- Lua functions called from Terra cannot return aggregates by value
 		local retval = aTrace.logprob.impl
-		print(hmc.getValue(aTrace.logprob))
 		hmc.toggleLuaAD(false)
 		return retval
 	end

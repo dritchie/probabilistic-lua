@@ -11,7 +11,7 @@ fi.FreeImage_Initialise(0)
 
 ----------------------------
 
-local targetMask = render.Framebuffer_newFromMaskImage("test/mask_small.png", 0.0)
+local targetMask = render.Framebuffer_newFromMaskImage("test/mask_square_small.png", 0.0)
 render.Framebuffer_invert(targetMask)
 
 local renderbuffer_normal = render.Framebuffer_new(render.Framebuffer_width(targetMask),
@@ -20,9 +20,10 @@ local renderbuffer_normal = render.Framebuffer_new(render.Framebuffer_width(targ
 local renderbuffer_hmc = render.Framebuffer_new(render.Framebuffer_width(targetMask),
 												   render.Framebuffer_height(targetMask),
 												   hmc.makeNum(0.0))
---local minMaxSmoothing = 200
+--local minMaxSmoothing = 20
 --local fieldSmoothing = 0.0025
-local minMaxSmoothing = 20
+local minMaxSmoothing = 5
+--local fieldSmoothing = 0.2
 local fieldSmoothing = 0.0025
 
 local function chooseRenderbuffer()
@@ -45,8 +46,10 @@ local function generate(dim)
 	local numCircles_poissonLambda = 50
 	local pos_min = 0.0
 	local pos_max = 1.0
+	-- local radius_min = 0.005
+	-- local radius_max = 0.05
 	local radius_min = 0.005
-	local radius_max = 0.05
+	local radius_max= 0.5
 	local constraintTightness = 0.1
 
 	-- Prior
@@ -63,7 +66,7 @@ local function generate(dim)
 	if numCircles > 0 then
 		local renderbuffer = chooseRenderbuffer()
 		render.Framebuffer_clear(renderbuffer)
-		--renderCircles(circles, renderbuffer, false, fieldSmoothing, minMaxSmoothing)
+		--renderCircles(circles, renderbuffer, true, fieldSmoothing, minMaxSmoothing)
 		renderCircles(circles, renderbuffer, true, fieldSmoothing, minMaxSmoothing)
 		local targetDist = render.Framebuffer_distance(renderbuffer, targetMask)
 		factor(-targetDist/constraintTightness)
@@ -89,8 +92,8 @@ math.randomseed(os.time())
 local t1 = os.clock()
 
 --local circles = MAP(generate, LARJTraceMH, {numsamps=10000, annealIntervals=200, globalTempMult=0.99, jumpFreq=0.05, verbose=verbose})
-local circles = MAP(makeFixedDimProg(40), LMC, {numsamps=10000, verbose=verbose})
---local circles = MAP(generate, T3HMC, {numsamps=1000, numT3Steps=500, T3StepSize=0.02, globalTempMult=0.99, jumpFreq=0.05, verbose=verbose})
+local samps = LMC(makeFixedDimProg(1), {numsamps=1000, verbose=verbose})
+local circles = sampleMAP(samps)
 
 print(string.format("numCircles: %d", #circles))
 render.Framebuffer_clear(renderbuffer_normal)
@@ -104,6 +107,21 @@ render.Framebuffer_saveToPNGImage(finalbuffer, "test/output.png")
 
 local t2 = os.clock()
 print(string.format("Time: %g", t2-t1))
+
+print("Rendering movie of chain dynamics...")
+for i,s in ipairs(samps) do
+	io.write(string.format(" frame %d\r", i))
+	io.flush()
+	render.Framebuffer_clear(finalbuffer)
+	renderCircles(s.returnValue, finalbuffer, false, fieldSmoothing, minMaxSmoothing)
+	render.Framebuffer_invert(finalbuffer)
+	render.Framebuffer_saveToPNGImage(finalbuffer, string.format("test/movie_%03d.png", i-1))
+end
+io.write("\nCompressing movie...")
+io.flush()
+util.wait("ffmpeg -y -r 5 -i test/movie_%03d.png -c:v libx264 -r 5 -pix_fmt yuv420p test/chain_dynamics.mp4 2>&1")
+util.wait("rm -f test/movie_*.png")
+print("DONE.")
 
 render.Framebuffer_delete(finalbuffer)
 render.Framebuffer_delete(renderbuffer_normal)
