@@ -120,9 +120,9 @@ end
 local numSites = 50
 local prior = 0.5
 local affinity = 20.0
-local defaultTemps = replicate(numSites-1, function() return 1.0 end)
+local function defaultTemps() return replicate(numSites-1, function() return 1.0 end) end
 local function ising(temps)
-	temps = temps or defaultTemps
+	temps = temps or defaultTemps()
 	local siteVals = replicate(numSites, function() if util.int2bool(flip({prior})) then return 1.0 else return -1.0 end end)
 	siteVals = Vector:new(siteVals)
 	for i=1,numSites-1 do
@@ -203,4 +203,77 @@ local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
 print("LOCALLY TEMPERED INFERENCE")
 print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))
 
+Autocorrelation over multiple runs experiment
+local runs = 20
+local acf_normal = {}
+local acf_global = {}
+local acf_local = {}
 
+for i=1,runs do
+	print(i)
+	local samps_normal = util.map(function(s) return s.returnValue end,
+		traceMH(program, {numsamps=numsamps, lag=lag}))
+	acf_normal[i] = autocorrelation(samps_normal)
+
+	local samps_globally_tempered = util.map(function(s) return s.returnValue end,
+		TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
+		 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag}))
+	acf_global[i] = autocorrelation(samps_globally_tempered)
+
+	local samps_locally_tempered = util.map(function(s) return s.returnValue end,
+		TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_local_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
+		 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag}))
+	acf_local[i] = autocorrelation(samps_locally_tempered)
+end
+
+local acf_normal_file = io.open("acf_normal.csv", "w")
+local acf_global_file = io.open("acf_global.csv", "w")
+local acf_local_file = io.open("acf_local.csv", "w")
+for i=1,numsamps do
+	acf_normal_file:write(table.concat(util.map(function(s) return s[i] end, acf_normal), ",") .. "\n")
+	acf_global_file:write(table.concat(util.map(function(s) return s[i] end, acf_global), ",") .. "\n")
+	acf_local_file:write(table.concat(util.map(function(s) return s[i] end, acf_local), ",") .. "\n")
+end
+acf_global_file:close()
+acf_local_file:close()
+
+-- Autocorrelation area over # of sites experiment
+runs = 10
+local minSites = 10
+local maxSites = 100
+local sitesStepSize = 10
+local aca_normal = {}
+local aca_global = {}
+local aca_local = {}
+
+local aca_normal_file = io.open("aca_normal.csv", "w")
+local aca_global_file = io.open("aca_global.csv", "w")
+local aca_local_file = io.open("aca_local.csv", "w")
+
+for i=minSites,maxSites,sitesStepSize do
+	print(i)
+	numSites = i
+	aca_normal[i] = {}
+	aca_global[i] = {}
+	aca_local[i] = {}
+	for j=1,runs do
+		local samps_normal = util.map(function(s) return s.returnValue end,
+			traceMH(program, {numsamps=numsamps, lag=lag}))
+		aca_normal[i][j] = autoCorrelationArea(samps_normal)
+		local samps_global = util.map(function(s) return s.returnValue end,
+			TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
+			 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag}))
+		aca_global[i][j] = autoCorrelationArea(samps_global)
+
+		local samps_local = util.map(function(s) return s.returnValue end,
+			TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_local_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
+			 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag}))
+		aca_local[i][j] = autoCorrelationArea(samps_local)
+	end
+	aca_normal_file:write(table.concat(aca_normal[i], ",") .. "\n")
+	aca_global_file:write(table.concat(aca_global[i], ",") .. "\n")
+	aca_local_file:write(table.concat(aca_local[i], ",") .. "\n")
+end
+
+aca_global_file:close()
+aca_local_file:close()
