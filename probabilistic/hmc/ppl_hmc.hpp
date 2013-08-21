@@ -37,7 +37,9 @@ namespace stan {
 	                           std::ostream* error_msgs = 0,
 	                           std::ostream* output_msgs = 0) {
 	        for (size_t i = 0; i < m.size(); i++)
+	        {
 	          m[i] += 0.5 * epsilon * g[i];
+	      	}
 	        for (size_t i = 0; i < x.size(); i++)
 	          x[i] += epsilon * inv_masses[i] * m[i];
 	        double logp;

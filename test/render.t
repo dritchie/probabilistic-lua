@@ -20,9 +20,10 @@ local renderbuffer_normal = render.Framebuffer_new(render.Framebuffer_width(targ
 local renderbuffer_hmc = render.Framebuffer_new(render.Framebuffer_width(targetMask),
 												   render.Framebuffer_height(targetMask),
 												   hmc.makeNum(0.0))
-local minMaxSmoothing = 200
+--local minMaxSmoothing = 200
 --local fieldSmoothing = 0.0025
-local fieldSmoothing = 0.005
+local minMaxSmoothing = 20
+local fieldSmoothing = 0.0025
 
 local function chooseRenderbuffer()
 	if hmc.luaADIsOn() then
@@ -38,18 +39,18 @@ local function renderCircles(circles, buffer, doSmooth, fieldSmooth, mmSmooth)
 	end
 end
 
-local function generate()
+local function generate(dim)
 
 	-- Params
-	local numCircles_poissonLambda = 40
+	local numCircles_poissonLambda = 50
 	local pos_min = 0.0
 	local pos_max = 1.0
 	local radius_min = 0.005
 	local radius_max = 0.05
 	local constraintTightness = 0.1
 
-	-- Prior, plus rendering as we go
-	local numCircles = poisson({numCircles_poissonLambda}, {isStructural=true})
+	-- Prior
+	local numCircles = dim or poisson({numCircles_poissonLambda}, {isStructural=true})
 	local circles = {}
 	for i=1,numCircles do
 		local r = uniform({radius_min, radius_max})
@@ -62,6 +63,7 @@ local function generate()
 	if numCircles > 0 then
 		local renderbuffer = chooseRenderbuffer()
 		render.Framebuffer_clear(renderbuffer)
+		--renderCircles(circles, renderbuffer, false, fieldSmoothing, minMaxSmoothing)
 		renderCircles(circles, renderbuffer, true, fieldSmoothing, minMaxSmoothing)
 		local targetDist = render.Framebuffer_distance(renderbuffer, targetMask)
 		factor(-targetDist/constraintTightness)
@@ -72,13 +74,24 @@ local function generate()
 	return circles
 end
 
+local function makeFixedDimProg(dim)
+	return function() return generate(dim) end
+end
+
+
+----------------------------
+
+local verbose = false
+
 
 math.randomseed(os.time())
 
 local t1 = os.clock()
 
-local circles = MAP(generate, LARJTraceMH, {numsamps=1000, annealIntervals=200, globalTempMult=0.99, jumpFreq=0.05, verbose=true})
---local circles = MAP(generate, T3HMC, {numsamps=1000, numT3Steps=500, T3StepSize=0.02, globalTempMult=0.99, jumpFreq=0.05, verbose=true})
+--local circles = MAP(generate, LARJTraceMH, {numsamps=10000, annealIntervals=200, globalTempMult=0.99, jumpFreq=0.05, verbose=verbose})
+local circles = MAP(makeFixedDimProg(40), LMC, {numsamps=10000, verbose=verbose})
+--local circles = MAP(generate, T3HMC, {numsamps=1000, numT3Steps=500, T3StepSize=0.02, globalTempMult=0.99, jumpFreq=0.05, verbose=verbose})
+
 print(string.format("numCircles: %d", #circles))
 render.Framebuffer_clear(renderbuffer_normal)
 renderCircles(circles, renderbuffer_normal, true, fieldSmoothing, minMaxSmoothing)

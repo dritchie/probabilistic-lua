@@ -644,6 +644,7 @@ function HMCKernel:makeLogProbFn()
 		-- We return the inner implementation of the dual num, because
 		-- Lua functions called from Terra cannot return aggregates by value
 		local retval = aTrace.logprob.impl
+		print(hmc.getValue(aTrace.logprob))
 		hmc.toggleLuaAD(false)
 		return retval
 	end

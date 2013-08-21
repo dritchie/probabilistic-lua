@@ -188,6 +188,10 @@ public:
 		int xpixmax = std::min(width, toInt(width*xmax)+1);
 		int ypixmin = std::max(0, toInt(height*ymin));
 		int ypixmax = std::min(height, toInt(height*ymax)+1);
+		// int xpixmin = 0;
+		// int xpixmax = width;
+		// int ypixmin = 0;
+		// int ypixmax = height;
 		// printf("xmin: (%g) %d, xmax: (%g) %d, ymin: (%g) %d, ymax: (%g) %d\n",
 		// 	value(xmin), xpixmin, value(xmax), xpixmax,
 		// 	value(ymin), ypixmin, value(ymax), ypixmax);
@@ -204,6 +208,7 @@ public:
 					Real newVal = exp(-f/fieldSmoothing);
 					Real blendVal = over(currVal, newVal);
 					Real clampedVal = softmin(blendVal, 1.0, minMaxSmoothing);
+					//Real clampedVal = fmin(blendVal, 1.0);
 					buffer[y][x] = clampedVal;
 				}
 				else if (f <= 0.0)

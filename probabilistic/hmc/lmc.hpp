@@ -71,6 +71,8 @@ namespace stan
 			{
 				this->_epsilon_last = this->_epsilon;
 
+				//printf("epsilon: %g\n", this->_epsilon);
+
 				// Update momentum.
 				// If dim of current _m vector doesn't match dimension of the model,
 				// then we resample from scratch
@@ -108,7 +110,12 @@ namespace stan
 				double H_new = 0.0;
 				for (size_t i = 0; i < m_new.size(); i++)
 					H_new += m_new[i]*m_new[i] * this->_inv_masses[i];
+				//printf("H_new: %g\n", H_new);
 				H_new = H_new / 2.0 - newlogp;
+
+				// printf("H_new: %g\n", H_new);
+				// printf("newlogp: %g\n", newlogp);
+				// printf("-------------------\n");
 
 				// Accept/reject test
 				double acceptThresh = exp(-H_new + H);
