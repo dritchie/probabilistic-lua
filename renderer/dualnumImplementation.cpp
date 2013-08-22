@@ -1,5 +1,6 @@
 #include "num.h"
 #include "var.h"
+#include <string.h>
 
 #define NUMTYPE num
 #define INNERNUMTYPE stan::agrad::var
@@ -16,3 +17,33 @@ int Framebuffer<stan::agrad::var>::toInt(stan::agrad::var v)
 }
 template<>
 double Framebuffer<stan::agrad::var>::value(stan::agrad::var r) { return r.val(); }
+
+// This operation effectively destroys the values in this Framebuffer, because
+// grad() recovers memory once completed.
+template<>
+void Framebuffer<stan::agrad::var>::renderGradientImage(Framebuffer<double>* dst, stan::agrad::var target)
+{
+	std::vector<stan::agrad::var> indepVars;
+	std::vector<double> gradients;
+
+	indepVars.resize(width*height);
+	//memcpy(&indepVars[0], buffer, width*height*sizeof(stan::agrad::var));
+	for (int y = 0; y < height; y++) for (int x = 0; x < height; x++)
+		indepVars[y*width + x] = buffer[y][x];
+	target.grad(indepVars, gradients);
+
+	//memcpy(dst->buffer, &gradients[0], width*height*sizeof(double));
+	for (int y = 0; y < height; y++) for (int x = 0; x < height; x++)
+		dst->buffer[y][x] = gradients[y*width + x];
+}
+
+// C interface version of the above
+struct Framebufferdouble
+{
+	Framebuffer<double>* innerfb;
+};
+extern "C" EXPORT void Framebuffer_gradientImage(Framebuffernum* src, Framebufferdouble* dst, num target)
+{
+	stan::agrad::var targetVar = NUM_TO_INNERNUM(target);
+	src->innerfb->renderGradientImage(dst->innerfb, targetVar);
+}

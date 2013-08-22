@@ -25,6 +25,7 @@ FRAMEBUFFER_T;
 EXPORT FRAMEBUFFER_T* CAT(FRAMEBUFFER, _new)(int width, int height, NUMTYPE clearVal);
 EXPORT FRAMEBUFFER_T* CAT(FRAMEBUFFER, _newFromMaskImage)(char* filename, NUMTYPE clearVal);
 EXPORT void CAT(FRAMEBUFFER, _saveToPNGImage)(FRAMEBUFFER_T* fb, char* filename);
+EXPORT void CAT(FRAMEBUFFER, _saveGradientImageToPNGImage)(FRAMEBUFFER_T* fb, char* filename);
 EXPORT void CAT(FRAMEBUFFER, _clear)(FRAMEBUFFER_T* fb);
 EXPORT void CAT(FRAMEBUFFER, _invert)(FRAMEBUFFER_T* fb);
 EXPORT void CAT(FRAMEBUFFER, _delete)(FRAMEBUFFER_T* fb);

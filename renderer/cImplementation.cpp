@@ -32,6 +32,11 @@ extern "C"
 		fb->innerfb->saveToPNGImage(filename);
 	}
 
+	EXPORT void CAT(FRAMEBUFFER, _saveGradientImageToPNGImage)(FRAMEBUFFER* fb, char* filename)
+	{
+		fb->innerfb->saveGradientImageToPNGImage(filename);
+	}
+
 	EXPORT void CAT(FRAMEBUFFER, _clear)(FRAMEBUFFER* fb)
 	{
 		fb->innerfb->clear();

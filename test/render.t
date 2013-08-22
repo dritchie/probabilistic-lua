@@ -108,19 +108,38 @@ render.Framebuffer_saveToPNGImage(finalbuffer, "test/output.png")
 local t2 = os.clock()
 print(string.format("Time: %g", t2-t1))
 
-print("Rendering movie of chain dynamics...")
+print("Rendering movie of chain dynamics...")	
 for i,s in ipairs(samps) do
 	io.write(string.format(" frame %d\r", i))
 	io.flush()
-	render.Framebuffer_clear(finalbuffer)
-	renderCircles(s.returnValue, finalbuffer, false, fieldSmoothing, minMaxSmoothing)
-	render.Framebuffer_invert(finalbuffer)
-	render.Framebuffer_saveToPNGImage(finalbuffer, string.format("test/movie_%03d.png", i-1))
+	render.Framebuffer_clear(renderbuffer_normal)
+	renderCircles(s.returnValue, renderbuffer_normal, true, fieldSmoothing, minMaxSmoothing)
+	render.Framebuffer_invert(renderbuffer_normal)
+	render.Framebuffer_saveToPNGImage(renderbuffer_normal, string.format("test/movie_%03d.png", i-1))
 end
 io.write("\nCompressing movie...")
 io.flush()
 util.wait("ffmpeg -y -r 5 -i test/movie_%03d.png -c:v libx264 -r 5 -pix_fmt yuv420p test/chain_dynamics.mp4 2>&1")
 util.wait("rm -f test/movie_*.png")
+print("DONE.")
+
+print("Rendering movie of gradients...")
+for i,s in ipairs(samps) do
+	io.write(string.format(" frame %d\r", i))
+	io.flush()
+	for i,v in ipairs(s.varlist) do
+		s.varlist[i].val = hmc.makeNum(v.val)
+	end
+	hmc.toggleLuaAD(true)
+	s:flushLogProbs()
+	render.Framebuffer_gradientImage(renderbuffer_hmc, renderbuffer_normal, s.logprob)
+	hmc.toggleLuaAD(false)
+	render.Framebuffer_saveGradientImageToPNGImage(renderbuffer_normal, string.format("test/gradmovie_%03d.png", i-1))
+end
+io.write("\nCompressing movie...")
+io.flush()
+util.wait("ffmpeg -y -r 5 -i test/gradmovie_%03d.png -c:v libx264 -r 5 -pix_fmt yuv420p test/grad_dynamics.mp4 2>&1")
+util.wait("rm -f test/gradmovie_*.png")
 print("DONE.")
 
 render.Framebuffer_delete(finalbuffer)

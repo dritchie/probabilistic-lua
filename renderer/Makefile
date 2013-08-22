@@ -11,6 +11,7 @@ LDFLAGS=-L$(FREEIMAGE_LDIR) -L../probabilistic/hmc -lfreeimage -lhmc
 HEADERS=\
 	cInterface.h \
 	dist.h \
+	extra.h \
 	Framebuffer.h
 
 CPP=\

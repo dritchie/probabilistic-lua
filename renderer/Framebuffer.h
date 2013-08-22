@@ -47,7 +47,7 @@ public:
 
 	static inline int quantize(Real val)
 	{
-		return toInt(floor(255*val));
+		return toInt(255*val);
 	}
 
 	Framebuffer(int w, int h, Real clearVal)
@@ -104,6 +104,49 @@ public:
 					rgb.rgbGreen = qval;
 					rgb.rgbBlue = qval;
 					rgb.rgbReserved = qval;
+				}
+				FreeImage_SetPixelColor(img, x, y, &rgb);
+			}
+		}
+		FreeImage_Save(FIF_PNG, img, filename, PNG_DEFAULT);
+		FreeImage_Unload(img);
+	}
+
+	// Saves to a PNG, but treats this Framebuffer as containing gradients
+	void saveGradientImageToPNGImage(char* filename)
+	{
+		// Normalize by the largest absolute value(?)
+		Real maxAbsVal = 0.0;
+		for (int y = 0; y < height; y++)
+		{
+			for (int x = 0; x < width; x++)
+			{
+				maxAbsVal = fmax(maxAbsVal, fabs(buffer[y][x]));
+			}
+		}
+
+		// Save
+		FIBITMAP* img = FreeImage_Allocate(width, height, 24, 0, 0, 0);
+		RGBQUAD rgb;
+		rgb.rgbReserved = 255;
+		for (int y = 0; y < height; y++)
+		{
+			for (int x = 0; x < width; x++)
+			{
+				Real val = buffer[y][x];
+				if (val >= 0.0)
+				{
+					Real t = val/maxAbsVal;
+					rgb.rgbRed = quantize(t);
+					rgb.rgbGreen = 0;
+					rgb.rgbBlue = 0;
+				}
+				else
+				{
+					Real t = -val/maxAbsVal;
+					rgb.rgbRed = 0;
+					rgb.rgbGreen = 0;
+					rgb.rgbBlue = quantize(t);
 				}
 				FreeImage_SetPixelColor(img, x, y, &rgb);
 			}
@@ -217,7 +260,12 @@ public:
 				}
 			}
 		}
+	}
 
+	// Only defined for dual num Framebuffers (see dualnumImplementation.cpp)
+	void renderGradientImage(Framebuffer<double>* dst, Real target)
+	{
+		throw "renderGradientImage not defined on Framebuffer<doubele>";
 	}
 
 	inline int getWidth() { return width; }
