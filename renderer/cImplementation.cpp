@@ -76,4 +76,10 @@ extern "C"
 		return fb->innerfb->getHeight();
 	}
 
+	EXPORT NUMTYPE CAT(FRAMEBUFFER, _getPixelValue)(FRAMEBUFFER* fb, int x, int y)
+	{
+		INNERNUMTYPE val = fb->innerfb->buffer[y][x];
+		return INNERNUM_TO_NUM(val);
+	}
+
 }

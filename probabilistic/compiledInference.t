@@ -628,7 +628,7 @@ function HMCKernel:next(currState, hyperparams)
 	self.setNonStructValues(self.currentTrace, self.varVals)
 	self.currentTrace:flushLogProbs()
 
-	print(string.format("LP: %g | %s", self.currentTrace.logprob, accepted and "ACCEPT" or "REJECT"))
+	--print(string.format("LP: %g | %s", self.currentTrace.logprob, accepted and "ACCEPT" or "REJECT"))
 
 	return self.currentTrace
 end

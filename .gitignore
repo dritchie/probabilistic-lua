@@ -5,3 +5,4 @@ output_smooth.png
 *.o
 chain_dynamics.mp4
 grad_dynamics.mp4
+gradientTestImg.png

@@ -34,6 +34,7 @@ EXPORT void CAT(FRAMEBUFFER, _renderCircle)(FRAMEBUFFER_T* fb, NUMTYPE x, NUMTYP
 	int doSmoothing, double fieldSmoothing, double minMaxSmoothing);
 EXPORT int CAT(FRAMEBUFFER, _width)(FRAMEBUFFER_T* fb);
 EXPORT int CAT(FRAMEBUFFER, _height)(FRAMEBUFFER_T* fb);
+EXPORT NUMTYPE CAT(FRAMEBUFFER, _getPixelValue)(FRAMEBUFFER_T* fb, int x, int y);
 
 #ifdef __cplusplus
 }

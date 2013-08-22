@@ -84,18 +84,68 @@ end
 
 ----------------------------
 
-local verbose = false
+-- local d = render.Framebuffer_distance(renderbuffer_hmc, targetMask)
+-- render.Framebuffer_gradientImage(renderbuffer_hmc, renderbuffer_normal, d)
+-- render.Framebuffer_saveGradientImageToPNGImage(renderbuffer_normal, "test/gradientTestImg.png")
+
+-- local w = render.Framebuffer_width(targetMask)
+-- local h = render.Framebuffer_height(targetMask)
+-- hmc.toggleLuaAD(true)
+-- local indeps = terralib.new(hmc.num[w*h])
+-- local d = 0.0
+-- local derivAccum = 0.0
+-- for y=0,h-1 do
+-- 	for x=0,w-1 do
+-- 		local hmcp = render.Framebuffer_getPixelValue(renderbuffer_hmc, x, y)
+-- 		local tgtp = render.Framebuffer_getPixelValue(targetMask, x, y)
+-- 		local diff = hmcp - tgtp
+-- 		d = d + diff*diff
+-- 		indeps[y*w + x] = hmcp
+-- 		derivAccum = derivAccum + 2 * diff
+-- 	end
+-- end
+-- local gradient = terralib.new(double[w*h])
+-- hmc.gradient(d, w*h, indeps, gradient)
+-- hmc.toggleLuaAD(false)
+-- for i=0,w*h-1 do
+-- 	print(gradient[i])
+-- end
+-- print("-----")
+-- print(hmc.getValue(derivAccum))
+
+-- local x = 20
+-- local y = 20
+-- hmc.toggleLuaAD(true)
+-- local indeps = terralib.new(hmc.num[1])
+-- local hmcp = render.Framebuffer_getPixelValue(renderbuffer_hmc, x, y)
+-- local tgtp = render.Framebuffer_getPixelValue(targetMask, x, y)
+-- local diff = hmcp - tgtp
+-- local dep = diff*diff
+-- indeps[0] = hmcp
+-- local gradient = terralib.new(double[1])
+-- hmc.gradient(dep, 1, indeps, gradient)
+-- hmc.toggleLuaAD(false)
+-- print(string.format("indep var val: %g", hmc.getValue(hmcp)))
+-- print(string.format("mask value: %g", tgtp))
+-- print(string.format("dep var val: %g", hmc.getValue(dep)))
+-- print(string.format("gradient: %g", gradient[0]))
+
+----------------------------
+
+local verbose = true
 
 
 math.randomseed(os.time())
 
 local t1 = os.clock()
 
---local circles = MAP(generate, LARJTraceMH, {numsamps=10000, annealIntervals=200, globalTempMult=0.99, jumpFreq=0.05, verbose=verbose})
 local samps = LMC(makeFixedDimProg(1), {numsamps=1000, verbose=verbose})
-local circles = sampleMAP(samps)
+local circles
+local finallp
+circles, finallp = sampleMAP(samps)
 
-print(string.format("numCircles: %d", #circles))
+--print(string.format("numCircles: %d", #circles))
+print(string.format("Final logprob: %g", finallp))
 render.Framebuffer_clear(renderbuffer_normal)
 renderCircles(circles, renderbuffer_normal, true, fieldSmoothing, minMaxSmoothing)
 render.Framebuffer_invert(renderbuffer_normal)
@@ -146,6 +196,9 @@ render.Framebuffer_delete(finalbuffer)
 render.Framebuffer_delete(renderbuffer_normal)
 render.Framebuffer_delete(renderbuffer_hmc)
 render.Framebuffer_delete(targetMask)
+
+
+----------------------------
 
 
 -- -- TEST

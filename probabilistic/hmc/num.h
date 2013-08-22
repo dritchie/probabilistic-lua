@@ -12,4 +12,6 @@ num makeNum(double val);
 
 double getValue(num n);
 
+void gradient(num dep, int numindeps, num* indeps, double* grad);
+
 #endif

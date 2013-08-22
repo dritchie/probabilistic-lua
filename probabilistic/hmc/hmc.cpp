@@ -37,6 +37,17 @@ extern "C"
 		stan::agrad::var v(val);
 		return *(num*)&v;
 	}
+
+	EXPORT void gradient(num dep, int numindeps, num* indeps, double* grad)
+	{
+		stan::agrad::var depv = *(stan::agrad::var*)&dep;
+		std::vector<stan::agrad::var> indepsv(numindeps);
+		for (int i = 0; i < numindeps; i++)
+			indepsv[i] = *(stan::agrad::var*)&indeps[i];
+		std::vector<double> g;
+		depv.grad(indepsv, g);
+		memcpy(grad, &g[0], numindeps*sizeof(double));
+	}
 }
 
 extern "C"

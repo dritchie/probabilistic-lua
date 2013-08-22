@@ -51,15 +51,22 @@ public:
 	}
 
 	Framebuffer(int w, int h, Real clearVal)
-	: width(w), height(h), clearValue(clearVal)
+	: width(w), height(h), clearValue(value(clearVal))
 	{
 		buffer = new Real*[height];
 		for (int hh = 0; hh < height; hh++)
 		{
 			buffer[hh] = new Real[width];
 			for (int ww = 0; ww < width; ww++)
-				buffer[hh][ww]= clearVal;
+				buffer[hh][ww] = Real(clearVal);
 		}
+	}
+
+	~Framebuffer()
+	{
+		for (int h = 0; h < height; h++)
+			delete[] buffer[h];
+		delete[] buffer;
 	}
 
 	static Framebuffer<Real>* newFromMaskImage(char* filename, Real clearVal)
@@ -161,7 +168,7 @@ public:
 		{
 			for (int x = 0; x < width; x++)
 			{
-				buffer[y][x] = clearValue;
+				buffer[y][x] = Real(clearValue);
 			}
 		}
 	}
@@ -276,7 +283,7 @@ public:
 public:
 	int width;
 	int height;
-	Real clearValue;
+	double clearValue;
 	Real** buffer;
 };
 

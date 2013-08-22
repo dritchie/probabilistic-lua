@@ -27,14 +27,15 @@ void Framebuffer<stan::agrad::var>::renderGradientImage(Framebuffer<double>* dst
 	std::vector<double> gradients;
 
 	indepVars.resize(width*height);
-	//memcpy(&indepVars[0], buffer, width*height*sizeof(stan::agrad::var));
 	for (int y = 0; y < height; y++) for (int x = 0; x < height; x++)
 		indepVars[y*width + x] = buffer[y][x];
 	target.grad(indepVars, gradients);
 
-	//memcpy(dst->buffer, &gradients[0], width*height*sizeof(double));
 	for (int y = 0; y < height; y++) for (int x = 0; x < height; x++)
+	{
+		//printf("%g\n", gradients[y*width + x]);
 		dst->buffer[y][x] = gradients[y*width + x];
+	}
 }
 
 // C interface version of the above

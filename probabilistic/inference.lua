@@ -45,7 +45,7 @@ local function sampleMAP(samps)
 			maxelem = s
 		end
 	end
-	return maxelem.returnValue
+	return maxelem.returnValue, maxelem.logprob
 end
 
 -- Maximum a posteriori inference (returns the highest probability sample)
