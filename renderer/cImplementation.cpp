@@ -60,10 +60,11 @@ extern "C"
 	}
 
 	EXPORT void CAT(FRAMEBUFFER, _renderCircle)(FRAMEBUFFER* fb, NUMTYPE x, NUMTYPE y, NUMTYPE r,
-		int doSmoothing, double fieldSmoothing, double minMaxSmoothing)
+		int doSmoothing, double tightFieldSmoothing, double looseFieldSmoothing,
+		double fieldBlend, double minMaxSmoothing)
 	{
 		fb->innerfb->renderCircle(NUM_TO_INNERNUM(x), NUM_TO_INNERNUM(y), NUM_TO_INNERNUM(r),
-			doSmoothing, fieldSmoothing, minMaxSmoothing);
+			doSmoothing, tightFieldSmoothing, looseFieldSmoothing, fieldBlend, minMaxSmoothing);
 	}
 
 	EXPORT int CAT(FRAMEBUFFER, _width)(FRAMEBUFFER* fb)

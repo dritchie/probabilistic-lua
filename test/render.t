@@ -20,10 +20,10 @@ local renderbuffer_normal = render.Framebuffer_new(render.Framebuffer_width(targ
 local renderbuffer_hmc = render.Framebuffer_new(render.Framebuffer_width(targetMask),
 												   render.Framebuffer_height(targetMask),
 												   hmc.makeNum(0.0))
---local minMaxSmoothing = 20
---local fieldSmoothing = 0.0025
 local minMaxSmoothing = 5
-local fieldSmoothing = 0.0025
+local tightFieldSmoothing = 0.001
+local looseFieldSmoothing = 0.1
+local fieldBlend = 0.8
 
 local function chooseRenderbuffer()
 	if hmc.luaADIsOn() then
@@ -33,17 +33,18 @@ local function chooseRenderbuffer()
 	end
 end
 
-local function renderCircles(circles, buffer, doSmooth, fieldSmooth, mmSmooth)
+local function renderCircles(circles, buffer, doSmooth)
 	for i,c in ipairs(circles) do
-		render.Framebuffer_renderCircle(buffer, c.x, c.y, c.r, doSmooth, fieldSmooth, mmSmooth)
+		render.Framebuffer_renderCircle(buffer, c.x, c.y, c.r,
+			doSmooth, tightFieldSmoothing, looseFieldSmoothing, fieldBlend, minMaxSmoothing)
 	end
 end
 
 local function doRender(circles, buffer)
 	if hmc.luaADIsOn() then
-		renderCircles(circles, buffer, true, fieldSmoothing, minMaxSmoothing)
+		renderCircles(circles, buffer, true)
 	else
-		renderCircles(circles, buffer, false, fieldSmoothing, minMaxSmoothing)
+		renderCircles(circles, buffer, false)
 	end
 end
 
@@ -53,10 +54,10 @@ local function generate(dim)
 	local numCircles_poissonLambda = 50
 	local pos_min = 0.0
 	local pos_max = 1.0
-	local radius_min = 0.005
-	local radius_max = 0.05
 	-- local radius_min = 0.005
-	-- local radius_max= 0.5
+	-- local radius_max = 0.05
+	local radius_min = 0.005
+	local radius_max= 0.5
 	local constraintTightness = 0.1
 
 	-- Prior
@@ -139,14 +140,13 @@ end
 ----------------------------
 
 local verbose = true
-local useSepGradProg = false
 
 
 math.randomseed(os.time())
 
 local t1 = os.clock()
 
-local samps = LMC(makeFixedDimProg(40), {numsamps=1000, useSeparateGradientProgram=useSepGradProg, numHMCSteps=50, verbose=verbose})
+local samps = LMC(makeFixedDimProg(2), {numsamps=1000, verbose=verbose})
 --local samps = LARJTraceMH(makeFixedDimProg(40), {numsamps=1000, verbose=verbose})
 local circles
 local finallp
@@ -155,11 +155,11 @@ circles, finallp = sampleMAP(samps)
 --print(string.format("numCircles: %d", #circles))
 print(string.format("Final logprob: %g", finallp))
 render.Framebuffer_clear(renderbuffer_normal)
-renderCircles(circles, renderbuffer_normal, true, fieldSmoothing, minMaxSmoothing)
+renderCircles(circles, renderbuffer_normal, true)
 render.Framebuffer_invert(renderbuffer_normal)
 render.Framebuffer_saveToPNGImage(renderbuffer_normal, "test/output_smooth.png")
 local finalbuffer = render.Framebuffer_new(500, 500, 0.0)
-renderCircles(circles, finalbuffer, false, fieldSmoothing, minMaxSmoothing)
+renderCircles(circles, finalbuffer, false)
 render.Framebuffer_invert(finalbuffer)
 render.Framebuffer_saveToPNGImage(finalbuffer, "test/output.png")
 
@@ -171,7 +171,7 @@ for i,s in ipairs(samps) do
 	io.write(string.format(" frame %d\r", i))
 	io.flush()
 	render.Framebuffer_clear(renderbuffer_normal)
-	renderCircles(s.returnValue, renderbuffer_normal, false, fieldSmoothing, minMaxSmoothing)
+	renderCircles(s.returnValue, renderbuffer_normal, true)
 	render.Framebuffer_invert(renderbuffer_normal)
 	render.Framebuffer_saveToPNGImage(renderbuffer_normal, string.format("test/movie_%03d.png", i-1))
 end

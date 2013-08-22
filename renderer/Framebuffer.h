@@ -218,14 +218,18 @@ public:
 	}
 
 	void renderCircle(Real xc, Real yc, Real rc,
-		int doSmoothing, double fieldSmoothing, double minMaxSmoothing)
+		int doSmoothing, double tightFieldSmoothing, double looseFieldSmoothing,
+		double fieldBlend, double minMaxSmoothing)
 	{
+		double wt = fieldBlend;
+		double wl = 1.0-wt;
+		
 		// How much do we need to expand the bounding box due to smoothing?
 		static const double v_thresh = 0.02;
 		double bbox_expand = 0.0;
 		if (doSmoothing)
 		{
-			bbox_expand = sqrt(-fieldSmoothing * log(v_thresh));
+			bbox_expand = sqrt(-looseFieldSmoothing * log(v_thresh));
 			//printf("bbox_expand: %g\n", bbox_expand);
 		}
 
@@ -255,11 +259,10 @@ public:
 				if (doSmoothing)
 				{
 					Real currVal = buffer[y][x];
-					Real newVal = exp(-f/fieldSmoothing);
-					Real blendVal = over(currVal, newVal);
-					Real clampedVal = softmin(blendVal, 1.0, minMaxSmoothing);
-					//Real clampedVal = fmin(blendVal, 1.0);
-					buffer[y][x] = clampedVal;
+					Real newVal = wt*exp(-f/tightFieldSmoothing) + wl*exp(-f/looseFieldSmoothing);
+					Real clampedVal = softmin(newVal, 1.0, minMaxSmoothing);
+					Real blendVal = over(currVal, clampedVal);
+					buffer[y][x] = blendVal;
 				}
 				else if (f <= 0.0)
 				{

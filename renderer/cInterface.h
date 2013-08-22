@@ -31,7 +31,7 @@ EXPORT void CAT(FRAMEBUFFER, _invert)(FRAMEBUFFER_T* fb);
 EXPORT void CAT(FRAMEBUFFER, _delete)(FRAMEBUFFER_T* fb);
 EXPORT NUMTYPE CAT(FRAMEBUFFER, _distance)(FRAMEBUFFER_T* fb1, FRAMEBUFFER_T* fb2);
 EXPORT void CAT(FRAMEBUFFER, _renderCircle)(FRAMEBUFFER_T* fb, NUMTYPE x, NUMTYPE y, NUMTYPE r,
-	int doSmoothing, double fieldSmoothing, double minMaxSmoothing);
+	int doSmoothing, double tightFieldSmoothing, double looseFieldSmoothing, double fieldBlend, double minMaxSmoothing);
 EXPORT int CAT(FRAMEBUFFER, _width)(FRAMEBUFFER_T* fb);
 EXPORT int CAT(FRAMEBUFFER, _height)(FRAMEBUFFER_T* fb);
 EXPORT NUMTYPE CAT(FRAMEBUFFER, _getPixelValue)(FRAMEBUFFER_T* fb, int x, int y);
