@@ -68,14 +68,16 @@ class FunctionPoinderModel : public stan::model::prob_grad_ad
 {
 public:
 	LogProbFunction lpfn;
-	FunctionPoinderModel() : stan::model::prob_grad_ad(0), lpfn(NULL) {}
-	void setLogprobFunction(LogProbFunction lp) { lpfn = lp; }
+	GradLogProbFunction gradlpfn;
+	FunctionPoinderModel() : stan::model::prob_grad_ad(0), lpfn(NULL), gradlpfn(NULL) {}
+	void setLogprobFunction(LogProbFunction lp, GradLogProbFunction gradlp)
+	{ lpfn = lp; gradlpfn = gradlp; }
 	virtual stan::agrad::var log_prob(std::vector<stan::agrad::var>& params_r, 
 			                  std::vector<int>& params_i,
 			                  std::ostream* output_stream = 0)
 	{
 		num* params = (num*)(&params_r[0]);
-		num lp = lpfn(params);
+		num lp = gradlpfn(params);
 		return *((stan::agrad::var*)&lp);
 	}
 	virtual double grad_log_prob(std::vector<double>& params_r, 
@@ -83,7 +85,15 @@ public:
                                    std::vector<double>& gradient,
                                    std::ostream* output_stream = 0)
 	{
-		return stan::model::prob_grad_ad::grad_log_prob(params_r, params_i, gradient, output_stream);
+		double lp = stan::model::prob_grad_ad::grad_log_prob(params_r, params_i, gradient, output_stream);
+		if (lpfn)
+		{
+			//printf("----------------\n");
+			//printf("gradlp: %g | ", lp);
+			lp = lpfn(&params_r[0]);
+			//printf("lp: %g\n", lp);
+		}
+		return lp;
 	}
 };
 
@@ -144,9 +154,9 @@ extern "C"
 		delete s;
 	}
 
-	EXPORT void HMC_setLogprobFunction(HMC_SamplerState* s, LogProbFunction lpfn)
+	EXPORT void HMC_setLogprobFunction(HMC_SamplerState* s, LogProbFunction lpfn, GradLogProbFunction gradlpfn)
 	{
-		s->model.setLogprobFunction(lpfn);
+		s->model.setLogprobFunction(lpfn, gradlpfn);
 	}
 
 	EXPORT int HMC_nextSample(HMC_SamplerState* s, double* vals)
@@ -171,7 +181,7 @@ extern "C"
 
 	EXPORT void HMC_setVariableValues(HMC_SamplerState* s, int numvals, double* vals)
 	{
-		if (s->model.lpfn == NULL)
+		if (s->model.gradlpfn == NULL)
 		{
 			hmcError("Cannot set variable values before log prob function has been set.");
 		}
@@ -231,7 +241,7 @@ extern "C"
 		delete s;
 	}
 
-	EXPORT void T3_setLogprobFunctions(T3_SamplerState* s, LogProbFunction lpfn1, LogProbFunction lpfn2)
+	EXPORT void T3_setLogprobFunctions(T3_SamplerState* s, GradLogProbFunction lpfn1, GradLogProbFunction lpfn2)
 	{
 		s->model.setLogprobFunctions(lpfn1, lpfn2);
 	}

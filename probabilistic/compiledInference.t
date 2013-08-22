@@ -556,10 +556,12 @@ local HMCKernel = {}
 -- Default parameters
 inf.KernelParams.numHMCSteps = 100
 inf.KernelParams.partialMomentumAlpha = 0.5
+inf.KernelParams.useSeparateGradientProgram = false
 
-function HMCKernel:new(type, numSteps, partialMomentumAlpha)
+function HMCKernel:new(type, numSteps, partialMomentumAlpha, useSeparateGradientProgram)
 	local newobj = 
 	{
+		useSeparateGradientProgram = useSeparateGradientProgram,
 		proposalsMade = 0,
 		proposalsAccepted = 0,
 		sampler = hmc.HMC_newSampler(type, numSteps, partialMomentumAlpha)
@@ -569,8 +571,10 @@ function HMCKernel:new(type, numSteps, partialMomentumAlpha)
 	setmetatable(newobj, self)
 	self.__index = self
 
-	newobj.lpfn = newobj:makeLogProbFn()
-	hmc.HMC_setLogprobFunction(newobj.sampler, newobj.lpfn.definitions[1]:getpointer())
+	newobj:makeLogProbFn()
+	local lpfn = newobj.lpfn
+	local gradlpfn = newobj.gradlpfn.definitions[1]:getpointer()
+	hmc.HMC_setLogprobFunction(newobj.sampler, lpfn, gradlpfn)
 
 	return newobj
 end
@@ -635,7 +639,9 @@ end
 
 function HMCKernel:makeLogProbFn()
 	local this = self
-	local function lpfn(varVals)
+
+	-- Gradient program
+	local function gradlpfn(varVals)
 		-- Copy dual number values into the trace, run traceupdate
 		local aTrace = this.currentTrace
 		this.setNonStructValues(aTrace, varVals)
@@ -647,11 +653,22 @@ function HMCKernel:makeLogProbFn()
 		hmc.toggleLuaAD(false)
 		return retval
 	end
+	gradlpfn = terralib.cast({&hmc.num} -> {&uint8}, gradlpfn)
+	self.gradlpfn =
+		terra(varVals: &hmc.num)
+			var impl = gradlpfn(varVals)
+			return hmc.num { impl }
+		end
 
-	lpfn = terralib.cast({&hmc.num} -> {&uint8}, lpfn)
-	return terra(varVals: &hmc.num)
-		var impl = lpfn(varVals)
-		return hmc.num { impl }
+	-- Normal program
+	if self.useSeparateGradientProgram then
+		local function lpfn(varVals)
+			local aTrace = this.currentTrace
+			this.setNonStructValues(aTrace, varVals)
+			aTrace:flushLogProbs()
+			return aTrace.logprob
+		end
+		self.lpfn = terralib.cast({&double} -> {double}, lpfn)
 	end
 end
 
@@ -685,20 +702,20 @@ local HMCKernel_HMC = {}
 setmetatable(HMCKernel_Langevin, {__index = HMCKernel})
 setmetatable(HMCKernel_NUTS, {__index = HMCKernel})
 setmetatable(HMCKernel_HMC, {__index = HMCKernel})
-function HMCKernel_Langevin:new(partialMomentumAlpha)
-	local newobj = HMCKernel:new(HMCKernelTypes.Langevin, 0, partialMomentumAlpha)
+function HMCKernel_Langevin:new(partialMomentumAlpha, useSeparateGradientProgram)
+	local newobj = HMCKernel:new(HMCKernelTypes.Langevin, 0, partialMomentumAlpha, useSeparateGradientProgram)
 	setmetatable(newobj, self)
 	self.__index = self
 	return newobj
 end
-function HMCKernel_NUTS:new()
-	local newobj = HMCKernel:new(HMCKernelTypes.NUTS, 0, 0)
+function HMCKernel_NUTS:new(useSeparateGradientProgram)
+	local newobj = HMCKernel:new(HMCKernelTypes.NUTS, 0, 0, useSeparateGradientProgram)
 	setmetatable(newobj, self)
 	self.__index = self
 	return newobj
 end
-function HMCKernel_HMC:new(numSteps)
-	local newobj = HMCKernel:new(HMCKernelTypes.HMC, numSteps, 0)
+function HMCKernel_HMC:new(numSteps, useSeparateGradientProgram)
+	local newobj = HMCKernel:new(HMCKernelTypes.HMC, numSteps, 0, useSeparateGradientProgram)
 	setmetatable(newobj, self)
 	self.__index = self
 	return newobj
@@ -910,27 +927,27 @@ end
 local function LMC(computation, params)
 	params = inf.KernelParams:new(params)
 	return inf.mcmc(computation,
-					HMCKernel_Langevin:new(params.partialMomentumAlpha),
+					HMCKernel_Langevin:new(params.partialMomentumAlpha, params.useSeparateGradientProgram),
 					params)
 end
 
 local function LARJLMC(computation, params)
 	params = inf.KernelParams:new(params)
-	local diffusionKernel = HMCKernel_Langevin:new(params.partialMomentumAlpha)
+	local diffusionKernel = HMCKernel_Langevin:new(params.partialMomentumAlpha, params.useSeparateGradientProgram)
 	return inf.LARJMCMC(computation, diffusionKernel, params)
 end
 
 local function NUTS(computation, params)
 	params = inf.KernelParams:new(params)
 	return inf.mcmc(computation,
-					HMCKernel_NUTS:new(),
+					HMCKernel_NUTS:new(params.useSeparateGradientProgram),
 					params)
 end
 
 local function HMC(computation, params)
 	params = inf.KernelParams:new(params)
 	return inf.mcmc(computation,
-					HMCKernel_HMC:new(params.numHMCSteps),
+					HMCKernel_HMC:new(params.numHMCSteps, params.useSeparateGradientProgram),
 					params)
 end
 

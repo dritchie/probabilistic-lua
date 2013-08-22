@@ -33,14 +33,14 @@ extern "C"
 class InterpolatedFunctionPointerModel : public stan::model::prob_grad_ad
 {
 public:
-	LogProbFunction lpfn1;
-	LogProbFunction lpfn2;
+	GradLogProbFunction lpfn1;
+	GradLogProbFunction lpfn2;
 	double alpha;
 	double globalTemp;
 	InterpolatedFunctionPointerModel() :
 		stan::model::prob_grad_ad(0), lpfn1(NULL), lpfn2(NULL),
 		alpha(0.0), globalTemp(1.0) {}
-	void setLogprobFunctions(LogProbFunction lp1, LogProbFunction lp2)
+	void setLogprobFunctions(GradLogProbFunction lp1, GradLogProbFunction lp2)
 	{ lpfn1 = lp1; lpfn2 = lp2; }
 	void setAlpha(double a) { alpha = a; }
 	void setGlobalTemp(double t) { globalTemp = t; }

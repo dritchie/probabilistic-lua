@@ -23,7 +23,6 @@ local renderbuffer_hmc = render.Framebuffer_new(render.Framebuffer_width(targetM
 --local minMaxSmoothing = 20
 --local fieldSmoothing = 0.0025
 local minMaxSmoothing = 5
---local fieldSmoothing = 0.2
 local fieldSmoothing = 0.0025
 
 local function chooseRenderbuffer()
@@ -40,16 +39,24 @@ local function renderCircles(circles, buffer, doSmooth, fieldSmooth, mmSmooth)
 	end
 end
 
+local function doRender(circles, buffer)
+	if hmc.luaADIsOn() then
+		renderCircles(circles, buffer, true, fieldSmoothing, minMaxSmoothing)
+	else
+		renderCircles(circles, buffer, false, fieldSmoothing, minMaxSmoothing)
+	end
+end
+
 local function generate(dim)
 
 	-- Params
 	local numCircles_poissonLambda = 50
 	local pos_min = 0.0
 	local pos_max = 1.0
-	-- local radius_min = 0.005
-	-- local radius_max = 0.05
 	local radius_min = 0.005
-	local radius_max= 0.5
+	local radius_max = 0.05
+	-- local radius_min = 0.005
+	-- local radius_max= 0.5
 	local constraintTightness = 0.1
 
 	-- Prior
@@ -66,8 +73,7 @@ local function generate(dim)
 	if numCircles > 0 then
 		local renderbuffer = chooseRenderbuffer()
 		render.Framebuffer_clear(renderbuffer)
-		--renderCircles(circles, renderbuffer, true, fieldSmoothing, minMaxSmoothing)
-		renderCircles(circles, renderbuffer, true, fieldSmoothing, minMaxSmoothing)
+		doRender(circles, renderbuffer)
 		local targetDist = render.Framebuffer_distance(renderbuffer, targetMask)
 		factor(-targetDist/constraintTightness)
 	end
@@ -133,13 +139,15 @@ end
 ----------------------------
 
 local verbose = true
+local useSepGradProg = false
 
 
 math.randomseed(os.time())
 
 local t1 = os.clock()
 
-local samps = LMC(makeFixedDimProg(1), {numsamps=1000, verbose=verbose})
+local samps = LMC(makeFixedDimProg(40), {numsamps=1000, useSeparateGradientProgram=useSepGradProg, numHMCSteps=50, verbose=verbose})
+--local samps = LARJTraceMH(makeFixedDimProg(40), {numsamps=1000, verbose=verbose})
 local circles
 local finallp
 circles, finallp = sampleMAP(samps)
@@ -163,7 +171,7 @@ for i,s in ipairs(samps) do
 	io.write(string.format(" frame %d\r", i))
 	io.flush()
 	render.Framebuffer_clear(renderbuffer_normal)
-	renderCircles(s.returnValue, renderbuffer_normal, true, fieldSmoothing, minMaxSmoothing)
+	renderCircles(s.returnValue, renderbuffer_normal, false, fieldSmoothing, minMaxSmoothing)
 	render.Framebuffer_invert(renderbuffer_normal)
 	render.Framebuffer_saveToPNGImage(renderbuffer_normal, string.format("test/movie_%03d.png", i-1))
 end

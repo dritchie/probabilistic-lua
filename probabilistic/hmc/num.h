@@ -6,7 +6,8 @@ typedef struct
 	void* impl;
 } num;
 
-typedef num(*LogProbFunction)(num*);
+typedef num(*GradLogProbFunction)(num*);
+typedef double(*LogProbFunction)(double*);
 
 num makeNum(double val);
 
