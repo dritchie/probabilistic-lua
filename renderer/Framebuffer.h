@@ -223,7 +223,7 @@ public:
 	{
 		double wt = fieldBlend;
 		double wl = 1.0-wt;
-		
+
 		// How much do we need to expand the bounding box due to smoothing?
 		static const double v_thresh = 0.02;
 		double bbox_expand = 0.0;
@@ -275,7 +275,7 @@ public:
 	// Only defined for dual num Framebuffers (see dualnumImplementation.cpp)
 	void renderGradientImage(Framebuffer<double>* dst, Real target)
 	{
-		throw "renderGradientImage not defined on Framebuffer<doubele>";
+		throw "renderGradientImage not defined on Framebuffer<double>";
 	}
 
 	inline int getWidth() { return width; }

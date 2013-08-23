@@ -45,6 +45,7 @@ local function sampleMAP(samps)
 			maxelem = s
 		end
 	end
+	if maxelem.returnValue == nil then maxelem = samps[1] end
 	return maxelem.returnValue, maxelem.logprob
 end
 
