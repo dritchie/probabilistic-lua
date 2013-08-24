@@ -54,9 +54,11 @@ function GradientDescentKernel:next(currTrace, hyperparams)
 	local newTrace = currTrace:deepcopy()
 	local nonStructs = self.nonStructs
 	local indeps = terralib.new(hmc.num[#nonStructs])
+	--print("----")
 	for i,n in ipairs(nonStructs) do
 		local rec = newTrace:getRecord(n)
 		local val = rec:getProp("val")
+		--print(val)
 		local dualval = hmc.makeNum(val)
 		rec:setProp("val", dualval)
 		indeps[i-1] = dualval
@@ -115,16 +117,15 @@ local renderbuffer_hmc = render.Framebuffer_new(render.Framebuffer_width(targetM
 												   render.Framebuffer_height(targetMask),
 												   hmc.makeNum(0.0))
 local minMaxSmoothing = 5
-local tightFieldSmoothing = 0.001
-local looseFieldSmoothing = 0.1
+local tightFieldSmoothing = 0.0005
+local looseFieldSmoothing = 0.05
 local fieldBlend = 0.8
+local nonZeroPixelWeight = 0.8
 
 local function chooseRenderbuffer()
 	if hmc.luaADIsOn() then
-		--print("hmc")
 		return renderbuffer_hmc
 	else
-		--print("normal")
 		return renderbuffer_normal
 	end
 end
@@ -150,7 +151,7 @@ local function generate(dim)
 	local numCircles_poissonLambda = 50
 	local pos_min = 0.0
 	local pos_max = 1.0
-	local radius_min = 0.005
+	local radius_min = 0.05
 	local radius_max= 0.1
 	-- local pos_mean = 0.5
 	-- local pos_sd = 0.25
@@ -176,7 +177,7 @@ local function generate(dim)
 		local renderbuffer = chooseRenderbuffer()
 		render.Framebuffer_clear(renderbuffer)
 		doRender(circles, renderbuffer)
-		local targetDist = render.Framebuffer_distance(renderbuffer, targetMask)
+		local targetDist = render.Framebuffer_distance(renderbuffer, targetMask, nonZeroPixelWeight)
 		factor(-targetDist/constraintTightness)
 	end
 
@@ -247,11 +248,11 @@ math.randomseed(os.time())
 
 local t1 = os.clock()
 
-local samps = GradientDescent(makeFixedDimProg(30), {numsamps=1000, gdStepSize=0.0001,
+local samps = GradientDescent(makeFixedDimProg(30), {numsamps=1000, gdStepSize=0.00025,
 													 gdInitialTemp=1.0, gdFinalTemp=1.0,
 													 gdInitialMass=0.0, gdFinalMass=0.0, verbose=verbose})
---local samps = traceMH(makeFixedDimProg(30), {numsamps=1000, verbose=verbose})
--- local samps = LMC(makeFixedDimProg(30), {numsamps=1000, verbose=verbose})
+-- local samps = traceMH(makeFixedDimProg(30), {numsamps=1000, verbose=verbose})
+--local samps = LMC(makeFixedDimProg(30), {numsamps=1000, verbose=verbose})
 --local samps = LARJLMC(generate, {numsamps=2000, jumpFreq=0.05, annealIntervals=0, annealStepsPerInterval=5, verbose=verbose})
 --local samps = T3HMC(generate, {numsamps=1000, jumpFreq=0.05, numT3Steps=50, T3StepSize=0.001, verbose=verbose})
 --local samps = LARJDriftMH(generate, {numsamps=2000, jumpFreq=0.05, annealIntervals=0, annealStepsPerInterval=5, defaultBandWidth=0.03, verbose=verbose})

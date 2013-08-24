@@ -53,9 +53,9 @@ extern "C"
 		delete fb;
 	}
 
-	EXPORT NUMTYPE CAT(FRAMEBUFFER, _distance)(FRAMEBUFFER* fb1, FRAMEBUFFER* fb2)
+	EXPORT NUMTYPE CAT(FRAMEBUFFER, _distance)(FRAMEBUFFER* fb, FRAMEBUFFER* fbtarget, double nonZeroPixelWeight)
 	{
-		INNERNUMTYPE dist = fb1->innerfb->distanceFrom(fb2->innerfb);
+		INNERNUMTYPE dist = fb->innerfb->distanceFrom(fbtarget->innerfb, nonZeroPixelWeight);
 		return INNERNUM_TO_NUM(dist);
 	}
 

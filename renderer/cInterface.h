@@ -29,7 +29,7 @@ EXPORT void CAT(FRAMEBUFFER, _saveGradientImageToPNGImage)(FRAMEBUFFER_T* fb, ch
 EXPORT void CAT(FRAMEBUFFER, _clear)(FRAMEBUFFER_T* fb);
 EXPORT void CAT(FRAMEBUFFER, _invert)(FRAMEBUFFER_T* fb);
 EXPORT void CAT(FRAMEBUFFER, _delete)(FRAMEBUFFER_T* fb);
-EXPORT NUMTYPE CAT(FRAMEBUFFER, _distance)(FRAMEBUFFER_T* fb1, FRAMEBUFFER_T* fb2);
+EXPORT NUMTYPE CAT(FRAMEBUFFER, _distance)(FRAMEBUFFER_T* fb, FRAMEBUFFER_T* fbtarget, double nonZeroPixelWeight);
 EXPORT void CAT(FRAMEBUFFER, _renderCircle)(FRAMEBUFFER_T* fb, NUMTYPE x, NUMTYPE y, NUMTYPE r,
 	int doSmoothing, double tightFieldSmoothing, double looseFieldSmoothing, double fieldBlend, double minMaxSmoothing);
 EXPORT int CAT(FRAMEBUFFER, _width)(FRAMEBUFFER_T* fb);

@@ -55,9 +55,7 @@ for name,val in pairs(dualnumImpl) do
 end
 
 -- Add extra overloads for the Framebuffer distance function.
-local d_n_dist = distImpl["Framebuffer_double_num_distance"]
 local n_d_dist = distImpl["Framebuffer_num_double_distance"]
-M["Framebuffer_distance"]:adddefinition(d_n_dist:getdefinitions()[1])
 M["Framebuffer_distance"]:adddefinition(n_d_dist:getdefinitions()[1])
 
 -- Add in anything from extras

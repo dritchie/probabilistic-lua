@@ -185,16 +185,19 @@ public:
 	}
 
 	template<class Real2>
-	Real distanceFrom(Framebuffer<Real2>* other)
+	Real distanceFrom(Framebuffer<Real2>* target, double nonZeroPixelWeight)
 	{
-		assert(width == other->width && height == other->height);
+		assert(width == target->width && height == target->height);
 		Real dist = 0.0;
 		for (int y = 0; y < height; y++)
 		{
 			for (int x = 0; x < width; x++)
 			{
-				Real diff = buffer[y][x] - other->buffer[y][x];
-				dist += diff*diff;
+				Real diff = buffer[y][x] - target->buffer[y][x];
+				if (target->buffer[y][x] > 0.0)
+					dist += nonZeroPixelWeight*diff*diff;
+				else
+					dist += (1.0-nonZeroPixelWeight)*diff*diff;
 			}
 		}
 		return dist;

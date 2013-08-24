@@ -41,7 +41,13 @@ end
 
 function uniform_logprob(val, lo, hi)
 	if val < lo or val > hi then return -math.huge end
-	return -math.log(hi - lo)
+	local lp = -math.log(hi - lo)
+	-- if val > hi then
+	-- 	lp = lp - math.pow(3, 4)*math.pow(val/hi, 3)
+	-- elseif val < lo then
+	-- 	lp = lp - math.pow(3, 4)*math.pow(lo/val, 3)
+	-- end
+	return lp
 end
 
 
