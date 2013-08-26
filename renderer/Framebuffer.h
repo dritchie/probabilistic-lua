@@ -185,7 +185,7 @@ public:
 	}
 
 	template<class Real2>
-	Real distanceFrom(Framebuffer<Real2>* target, double nonZeroPixelWeight)
+	Real distanceFrom(Framebuffer<Real2>* target, double zeroPixelWeight)
 	{
 		assert(width == target->width && height == target->height);
 		Real dist = 0.0;
@@ -195,9 +195,9 @@ public:
 			{
 				Real diff = buffer[y][x] - target->buffer[y][x];
 				if (target->buffer[y][x] > 0.0)
-					dist += nonZeroPixelWeight*diff*diff;
+					dist += diff*diff;
 				else
-					dist += (1.0-nonZeroPixelWeight)*diff*diff;
+					dist += zeroPixelWeight*diff*diff;
 			}
 		}
 		return dist;
@@ -208,6 +208,11 @@ public:
 		Real xdiff = x - xc;
 		Real ydiff = y - yc;
 		return xdiff*xdiff + ydiff*ydiff - rc*rc;
+	}
+
+	static inline Real softmax(Real n, Real m, double alpha)
+	{
+		return pow(pow(n, alpha) + pow(m, alpha), 1.0/alpha);
 	}
 
 	static inline Real softmin(Real n, Real m, double alpha)
@@ -233,7 +238,6 @@ public:
 		if (doSmoothing)
 		{
 			bbox_expand = sqrt(-looseFieldSmoothing * log(v_thresh));
-			//printf("bbox_expand: %g\n", bbox_expand);
 		}
 
 		// Iterate over all pixels potentially covered by this shape
@@ -245,13 +249,6 @@ public:
 		int xpixmax = std::min(width, toInt(width*xmax)+1);
 		int ypixmin = std::max(0, toInt(height*ymin));
 		int ypixmax = std::min(height, toInt(height*ymax)+1);
-		// int xpixmin = 0;
-		// int xpixmax = width;
-		// int ypixmin = 0;
-		// int ypixmax = height;
-		// printf("xmin: (%g) %d, xmax: (%g) %d, ymin: (%g) %d, ymax: (%g) %d\n",
-		// 	value(xmin), xpixmin, value(xmax), xpixmax,
-		// 	value(ymin), ypixmin, value(ymax), ypixmax);
 		for (int y = ypixmin; y < ypixmax; y++)
 		{
 			Real ypoint = (y + 0.5)/height;

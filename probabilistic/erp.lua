@@ -63,7 +63,7 @@ end
 
 -- Make ERPs for common random number types, export them --
 
-local erp = {}
+local erp = {makeERP = makeERP}
 
 erp.flip =
 makeERP(random.flip_sample,

@@ -19,7 +19,7 @@ struct Framebuffernum;
 
 
 EXPORT num Framebuffer_num_double_distance(struct Framebuffernum* fb, struct Framebufferdouble* fbtarget,
-										   double nonZeroPixelWeight);
+										   double zeroPixelWeight);
 
 #ifdef __cplusplus
 }

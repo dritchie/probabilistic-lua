@@ -48,7 +48,7 @@ namespace stan
 				bool epsilon_adapt = true,
 				// Optimal for HMC is 0.65, for LMC is 0.57. Perhaps partial momentum
 				// refreshment puts us somewhere in between?
-				double delta = 0.5,
+				double delta = 0.58,
 				double gamma = 0.05,
 				BaseRNG base_rng = BaseRNG(std::time(0)))
 			: ppl_hmc<BaseRNG>(model,
@@ -71,6 +71,7 @@ namespace stan
 			{
 				this->_epsilon_last = this->_epsilon;
 
+				//this->_epsilon_last = 0.005;
 				//printf("epsilon: %g\n", this->_epsilon);
 
 				// Update momentum.

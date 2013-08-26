@@ -115,6 +115,10 @@ namespace stan {
        */
       virtual sample next_impl() {
 
+        //printf("epsilon: %g\n", this->_epsilon);
+        //this->_epsilon = 0.00025;
+        //this->_epsilon = 0.001;
+
         std::vector<double> m(this->_model.num_params_r());
         for (size_t i = 0; i < m.size(); ++i)
           m[i] = this->_rand_unit_norm() * this->_inv_masses[i];

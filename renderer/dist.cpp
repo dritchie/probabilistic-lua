@@ -15,9 +15,9 @@ struct Framebufferdouble
 extern "C"
 {
 	EXPORT num Framebuffer_num_double_distance(Framebuffernum* fb, Framebufferdouble* fbtarget,
-		double nonZeroPixelWeight)
+		double zeroPixelWeight)
 	{
-		stan::agrad::var dist = fb->innerfb->distanceFrom(fbtarget->innerfb, nonZeroPixelWeight);
+		stan::agrad::var dist = fb->innerfb->distanceFrom(fbtarget->innerfb, zeroPixelWeight);
 		return *((num*)(&dist));
 	}
 }

@@ -107,6 +107,22 @@ end
 
 ----------------------------
 
+function uniform_falloff_logprob(val, lo, hi)
+	local lp = -math.log(hi - lo)
+	if val > hi then
+		lp = lp - (val-lo)/(hi-lo)
+	elseif val < lo then
+		lp = lp - (hi-val)/(hi-lo)
+	end
+	return lp
+end
+
+local uniformWithFalloff =
+makeERP(random.uniform_sample,
+		uniform_falloff_logprob)
+
+----------------------------
+
 local targetMask = render.Framebuffer_newFromMaskImage("test/mask_small.png", 0.0)
 render.Framebuffer_invert(targetMask)
 
@@ -118,9 +134,11 @@ local renderbuffer_hmc = render.Framebuffer_new(render.Framebuffer_width(targetM
 												   hmc.makeNum(0.0))
 local minMaxSmoothing = 5
 local tightFieldSmoothing = 0.0005
-local looseFieldSmoothing = 0.05
-local fieldBlend = 0.8
-local nonZeroPixelWeight = 0.8
+local looseFieldSmoothing = 0.02
+-- local tightFieldSmoothing = 0.00025
+-- local looseFieldSmoothing = 0.025
+local fieldBlend = 0.9
+local zeroPixelWeight = 1.0
 
 local function chooseRenderbuffer()
 	if hmc.luaADIsOn() then
@@ -151,22 +169,23 @@ local function generate(dim)
 	local numCircles_poissonLambda = 50
 	local pos_min = 0.0
 	local pos_max = 1.0
-	local radius_min = 0.05
+	local radius_min = 0.025
 	local radius_max= 0.1
 	-- local pos_mean = 0.5
 	-- local pos_sd = 0.25
-	-- local radius_k = 1.0
-	-- local radius_theta = 0.025
-	local constraintTightness = 1.0
+	-- local radius_k = 10.0
+	-- local radius_theta = 0.5
+	-- local radius_mult = 0.0075
+	local constraintTightness = 0.05
 
 	-- Prior
 	local numCircles = dim or poisson({numCircles_poissonLambda}, {isStructural=true})
 	local circles = {}
 	for i=1,numCircles do
-		local r = uniform({radius_min, radius_max})
-		local x = uniform({pos_min, pos_max})
-		local y = uniform({pos_min, pos_max})
-		-- local r = gamma({radius_k, radius_theta})
+		local r = uniformWithFalloff({radius_min, radius_max})
+		local x = uniformWithFalloff({pos_min, pos_max})
+		local y = uniformWithFalloff({pos_min, pos_max})
+		-- local r = radius_mult*gamma({radius_k, radius_theta})
 		-- local x = gaussian({pos_mean, pos_sd})
 		-- local y = gaussian({pos_mean, pos_sd})
 		table.insert(circles, {x=x, y=y, r=r})
@@ -177,11 +196,9 @@ local function generate(dim)
 		local renderbuffer = chooseRenderbuffer()
 		render.Framebuffer_clear(renderbuffer)
 		doRender(circles, renderbuffer)
-		local targetDist = render.Framebuffer_distance(renderbuffer, targetMask, nonZeroPixelWeight)
+		local targetDist = render.Framebuffer_distance(renderbuffer, targetMask, zeroPixelWeight)
 		factor(-targetDist/constraintTightness)
 	end
-
-	--print(numCircles)
 
 	return circles
 end
@@ -189,55 +206,6 @@ end
 local function makeFixedDimProg(dim)
 	return function() return generate(dim) end
 end
-
-
-----------------------------
-
--- local d = render.Framebuffer_distance(renderbuffer_hmc, targetMask)
--- render.Framebuffer_gradientImage(renderbuffer_hmc, renderbuffer_normal, d)
--- render.Framebuffer_saveGradientImageToPNGImage(renderbuffer_normal, "test/gradientTestImg.png")
-
--- local w = render.Framebuffer_width(targetMask)
--- local h = render.Framebuffer_height(targetMask)
--- hmc.toggleLuaAD(true)
--- local indeps = terralib.new(hmc.num[w*h])
--- local d = 0.0
--- local derivAccum = 0.0
--- for y=0,h-1 do
--- 	for x=0,w-1 do
--- 		local hmcp = render.Framebuffer_getPixelValue(renderbuffer_hmc, x, y)
--- 		local tgtp = render.Framebuffer_getPixelValue(targetMask, x, y)
--- 		local diff = hmcp - tgtp
--- 		d = d + diff*diff
--- 		indeps[y*w + x] = hmcp
--- 		derivAccum = derivAccum + 2 * diff
--- 	end
--- end
--- local gradient = terralib.new(double[w*h])
--- hmc.gradient(d, w*h, indeps, gradient)
--- hmc.toggleLuaAD(false)
--- for i=0,w*h-1 do
--- 	print(gradient[i])
--- end
--- print("-----")
--- print(hmc.getValue(derivAccum))
-
--- local x = 20
--- local y = 20
--- hmc.toggleLuaAD(true)
--- local indeps = terralib.new(hmc.num[1])
--- local hmcp = render.Framebuffer_getPixelValue(renderbuffer_hmc, x, y)
--- local tgtp = render.Framebuffer_getPixelValue(targetMask, x, y)
--- local diff = hmcp - tgtp
--- local dep = diff*diff
--- indeps[0] = hmcp
--- local gradient = terralib.new(double[1])
--- hmc.gradient(dep, 1, indeps, gradient)
--- hmc.toggleLuaAD(false)
--- print(string.format("indep var val: %g", hmc.getValue(hmcp)))
--- print(string.format("mask value: %g", tgtp))
--- print(string.format("dep var val: %g", hmc.getValue(dep)))
--- print(string.format("gradient: %g", gradient[0]))
 
 ----------------------------
 
@@ -248,11 +216,12 @@ math.randomseed(os.time())
 
 local t1 = os.clock()
 
-local samps = GradientDescent(makeFixedDimProg(30), {numsamps=1000, gdStepSize=0.00025,
-													 gdInitialTemp=1.0, gdFinalTemp=1.0,
-													 gdInitialMass=0.0, gdFinalMass=0.0, verbose=verbose})
--- local samps = traceMH(makeFixedDimProg(30), {numsamps=1000, verbose=verbose})
---local samps = LMC(makeFixedDimProg(30), {numsamps=1000, verbose=verbose})
+-- local samps = GradientDescent(makeFixedDimProg(30), {numsamps=1000, gdStepSize=0.00025,
+-- 													 gdInitialTemp=1.0, gdFinalTemp=1.0,
+-- 													 gdInitialMass=0.0, gdFinalMass=0.0, verbose=verbose})
+--local samps = traceMH(makeFixedDimProg(50), {numsamps=500, verbose=verbose})
+local samps = LMC(makeFixedDimProg(50), {numsamps=500, partialMomenutmAlpha=0.0, verbose=verbose})
+--local samps = HMC(makeFixedDimProg(30), {numsamps=10, numHMCSteps=100, verbose=verbose})
 --local samps = LARJLMC(generate, {numsamps=2000, jumpFreq=0.05, annealIntervals=0, annealStepsPerInterval=5, verbose=verbose})
 --local samps = T3HMC(generate, {numsamps=1000, jumpFreq=0.05, numT3Steps=50, T3StepSize=0.001, verbose=verbose})
 --local samps = LARJDriftMH(generate, {numsamps=2000, jumpFreq=0.05, annealIntervals=0, annealStepsPerInterval=5, defaultBandWidth=0.03, verbose=verbose})

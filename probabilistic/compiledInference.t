@@ -555,7 +555,7 @@ local HMCKernel = {}
 
 -- Default parameters
 inf.KernelParams.numHMCSteps = 100
-inf.KernelParams.partialMomentumAlpha = 0.5
+inf.KernelParams.partialMomentumAlpha = 0.0
 inf.KernelParams.useSeparateGradientProgram = false
 
 function HMCKernel:new(type, numSteps, partialMomentumAlpha, useSeparateGradientProgram)
