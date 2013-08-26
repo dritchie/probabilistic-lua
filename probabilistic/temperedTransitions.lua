@@ -52,6 +52,10 @@ function TemperedTransitionsKernel:next(currState, hyperparams)
 		return newTrace
 	end
 
+	-- print("===================")
+	-- print("--- INITIAL STATE ---")
+	-- for i,v in ipairs(currState.returnValue) do print(v) end
+
 	self.proposalsMade = self.proposalsMade + 1
 	local nextTrace = currState:deepcopy()
 	nextTrace = self:releaseControl(nextTrace)
@@ -68,6 +72,14 @@ function TemperedTransitionsKernel:next(currState, hyperparams)
 		nextTrace:traceUpdate(true)
 		local numerlp = nextTrace.logprob
 		annealingLpRatio = annealingLpRatio + (numerlp - denomlp)
+
+		-- print(numerlp - denomlp)
+		-- if not self.avgLpDiff then
+		-- 	self.avgLpDiff = (numerlp - denomlp)
+		-- else
+		-- 	self.avgLpDiff = 0.5*self.avgLpDiff + 0.5*(numerlp - denomlp)
+		-- end
+
 		for aStep=1,self.annealStepsPerInterval do
 			nextTrace = self.innerKernel:next(nextTrace)
 		end
@@ -83,10 +95,25 @@ function TemperedTransitionsKernel:next(currState, hyperparams)
 	nextTrace = self.innerKernel:releaseControl(nextTrace)
 	nextTrace = self:assumeControl(nextTrace)
 
+	-- print(self.avgLpDiff)
+
+	-- print("--- FINAL STATE ---")
+	-- for i,v in ipairs(nextTrace.returnValue) do print(v) end
+	-- print(string.format("Acceptance Prob: %g", annealingLpRatio))
+
+	-- if not self.avgLpRatio then
+	-- 	self.avgLpRatio = annealingLpRatio
+	-- else
+	-- 	self.avgLpRatio = 0.75*self.avgLpRatio + 0.25*annealingLpRatio
+	-- end
+	-- print(self.avgLpRatio)
+
 	if nextTrace.conditionsSatisfied and math.log(math.random()) < annealingLpRatio then
+		--print("ACCEPTED")
 		self.proposalsAccepted = self.proposalsAccepted + 1
 		return nextTrace
 	else
+		--print("REJECTED")
 		return currState
 	end
 end

@@ -119,7 +119,7 @@ end
 -- A 1D Ising model
 local numSites = 10
 local prior = 0.5
-local affinity = 10.0
+local affinity = 5.0
 local defaultTemps = replicate(numSites-1, function() return 1.0 end)
 local function ising(temps)
 	temps = temps or defaultTemps
@@ -133,8 +133,8 @@ end
 
 -- For the time being, just a global annealing schedule
 -- (i.e. all temperatures adjusted in lockstep)
-local function scheduleGen_ising_global(annealStep, numAnnealSteps)
-	local a = annealStep/numAnnealSteps
+local function scheduleGen_ising_global(annealStep, maxAnnealStep)
+	local a = annealStep/maxAnnealStep
 	local val = 2.0*math.abs(a - 0.5)
 	--local val = (2.0*a - 1); val = val*val
 	return replicate(numSites-1, function() return val end)
@@ -142,8 +142,8 @@ end
 
 -- Generates a schedule that lowers site temperatures to 0 from left to right,
 -- then raises them back to 1 from right to left
-local function scheduleGen_ising_local_left_to_right(annealStep, numAnnealSteps)
-	local val = 2 * (math.abs(0.5 - (annealStep-1)/(numAnnealSteps-1))) * (numSites-1)
+local function scheduleGen_ising_local_left_to_right(annealStep, maxAnnealStep)
+	local val = 2 * (math.abs(0.5 - (annealStep)/(maxAnnealStep))) * (numSites-1)
 	local decimal = val % 1
 	local schedule = {}
 	for i=1,val do
@@ -175,36 +175,40 @@ local numsamps = 1000
 local lag = 1
 local verbose = true
 
-local annealIntervals = 500
-local annealStepsPerInterval = numSites
+-- local annealIntervals = 200
+-- local annealStepsPerInterval = numSites
+local annealIntervals = 1000
+local annealStepsPerInterval = 1
 local temperedTransitionsFreq = 1.0
 
 
 -----------------------------------------------------------------
 
 -- -- Normal inference
+-- print("NORMAL INFERENCE")
 -- local samps_normal = util.map(function(s) return s.returnValue end,
 -- 	traceMH(program, {numsamps=numsamps, lag=lag, verbose=verbose}))
 -- local aca_normal = autoCorrelationArea(samps_normal)
--- print("NORMAL INFERENCE")
 -- print(string.format("Autocorrelation area of samples: %g", aca_normal))
 
 -- print("------------------")
 
 -- -- Globally tempered inference
+-- print("GLOBALLY TEMPERED INFERENCE")
 -- local samps_globally_tempered = util.map(function(s) return s.returnValue end,
 -- 	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
 -- 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
 -- local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
--- print("GLOBALLY TEMPERED INFERENCE")
 -- print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
 
+-- print("------------------")
+
 -- -- Locally tempered inference
+-- print("LOCALLY TEMPERED INFERENCE")
 -- local samps_locally_tempered = util.map(function(s) return s.returnValue end,
 -- 	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_local_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
 -- 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
 -- local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
--- print("LOCALLY TEMPERED INFERENCE")
 -- print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))
 
 
@@ -227,10 +231,10 @@ for i=1,runs do
 		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
 	acf_global[i] = autocorrelation(samps_globally_tempered)
 
-	-- local samps_locally_tempered = util.map(function(s) return s.returnValue end,
-	-- 	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_local_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
-	-- 	 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
-	-- acf_local[i] = autocorrelation(samps_locally_tempered)
+	local samps_locally_tempered = util.map(function(s) return s.returnValue end,
+		TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_local_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
+		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
+	acf_local[i] = autocorrelation(samps_locally_tempered)
 end
 
 local acf_normal_file = io.open("acf_normal.csv", "w")
@@ -297,4 +301,4 @@ acf_local_file:close()
 
 
 -- Render the graphs
-util.wait("Rscript plot.r")
+--util.wait("Rscript plot.r")
