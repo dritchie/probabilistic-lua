@@ -45,17 +45,19 @@ end
 local function autocorrelation(values)
 	local n = table.getn(values)
 
-	local mu = mean(values)
-	local var = variance(values)
+	-- local mu = mean(values)
+	-- local var = variance(values)
 
 	local autocor_dist = {}
 
 	for lag=1,n do
 		autocor = 0 
 		for t=1,n-lag do
-			autocor = autocor + (values[t] - mu) * (values[t+lag] - mu)
+			--autocor = autocor + (values[t] - mu) * (values[t+lag] - mu)
+			autocor = autocor + values[t]*values[t+lag]
 		end
-		autocor = autocor / n / var
+		autocor = autocor / n
+		--if var > 0 then autocor = autocor / var end
 		autocor_dist[lag] = autocor
 	end
 
