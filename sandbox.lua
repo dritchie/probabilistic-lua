@@ -4,6 +4,7 @@ local util = require("probabilistic.util")
 local random = require("probabilistic.random")
 util.openpackage(pr)
 
+math.randomseed(os.time())
 
 -- Version of uniform ERP that doesn't actually contribute to the
 -- the log probability, so that we can do inference on distributions
@@ -132,7 +133,20 @@ local function ising(temps)
 	return siteVals
 end
 
--- For the time being, just a global annealing schedule
+-- A 1D Ising model with varying affinities
+local possibleAffinities = {1.0, 5.0, 10.0, 20.0}
+local affinities = replicate(numSites-1, function() return uniformDraw(possibleAffinities) end)
+local function isingVarying(temps)
+	temps = temps or defaultTemps
+	local siteVals = replicate(numSites, function() if util.int2bool(flip({prior})) then return 1.0 else return -1.0 end end)
+	siteVals = Vector:new(siteVals)
+	for i=1,numSites-1 do
+		factor(temps[i]*affinities[i]*siteVals[i]*siteVals[i+1])
+	end
+	return siteVals
+end
+
+-- Global annealing schedule
 -- (i.e. all temperatures adjusted in lockstep)
 local function scheduleGen_ising_global(annealStep, maxAnnealStep)
 	local a = annealStep/maxAnnealStep
@@ -187,6 +201,30 @@ local function scheduleGen_ising_inside_out(annealStep, maxAnnealStep)
 	return schedule
 end
 
+-- Annealing schedule that changes annealing speed based on the
+-- strength of the affinity (strong links anneal more slowly)
+local function scheduleGen_ising_affinity_based(annealStep, maxAnnealStep)
+	local maxAffinity = math.max(unpack(possibleAffinities))
+	local alpha = annealStep/maxAnnealStep
+	local schedule = {}
+	for i=1,numSites-1 do
+		local aff = affinities[i]
+		local multiplier = maxAffinity/aff
+		local firstZero = 0.5/multiplier
+		local secondZero = 0.5 + (0.5 - firstZero)
+		local val = 0.0
+		if alpha <= firstZero then
+			val = 2.0*math.abs(multiplier*(alpha-firstZero))
+		elseif alpha >= secondZero then
+			val = 2.0*math.abs(multiplier*(alpha-secondZero))
+		end
+		schedule[i] = val
+	end
+	-- print("-----")
+	-- for i,v in ipairs(schedule) do print(v) end
+	return schedule
+end
+
 --------------------------------
 
 
@@ -200,8 +238,6 @@ local program = ising
 
 print("------------------")
 
-math.randomseed(os.time())
-
 local numsamps = 1000
 local lag = 1
 local verbose = true
@@ -212,13 +248,14 @@ local annealIntervals = 1000
 local annealStepsPerInterval = 1
 local temperedTransitionsFreq = 1.0
 
-
 -----------------------------------------------------------------
+
+-- Running stuff with varying affinities.
 
 -- Normal inference
 print("NORMAL INFERENCE")
 local samps_normal = util.map(function(s) return s.returnValue end,
-	traceMH(program, {numsamps=numsamps, lag=lag, verbose=verbose}))
+	traceMH(isingVarying, {numsamps=numsamps, lag=lag, verbose=verbose}))
 local aca_normal = autoCorrelationArea(samps_normal)
 print(string.format("Autocorrelation area of samples: %g", aca_normal))
 
@@ -227,7 +264,7 @@ print("------------------")
 -- Globally tempered inference
 print("GLOBALLY TEMPERED INFERENCE")
 local samps_globally_tempered = util.map(function(s) return s.returnValue end,
-	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
+	TemperedTraceMH(isingVarying, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
 local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
 print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
@@ -235,22 +272,53 @@ print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered
 print("------------------")
 
 -- Locally tempered inference
-print("LOCALLY TEMPERED INFERENCE (LEFT-TO-RIGHT)")
-local samps_locally_tempered_ltr = util.map(function(s) return s.returnValue end,
-	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_local_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
+print("LOCALLY TEMPERED INFERENCE")
+local samps_locally_tempered = util.map(function(s) return s.returnValue end,
+	TemperedTraceMH(isingVarying, {scheduleGenerator=scheduleGen_ising_affinity_based, temperedTransitionsFreq=temperedTransitionsFreq,
 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
-local aca_locally_tempered_ltr = autoCorrelationArea(samps_locally_tempered_ltr)
-print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered_ltr))
+local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
+print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))
 
-print("------------------")
+-----------------------------------------------------------------
 
--- Locally tempered inference
-print("LOCALLY TEMPERED INFERENCE (INSIDE-OUT)")
-local samps_locally_tempered_io = util.map(function(s) return s.returnValue end,
-	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_inside_out, temperedTransitionsFreq=temperedTransitionsFreq,
-	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
-local aca_locally_tempered_io = autoCorrelationArea(samps_locally_tempered_io)
-print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered_io))
+-- Running stuff with constant affinity.
+
+-- -- Normal inference
+-- print("NORMAL INFERENCE")
+-- local samps_normal = util.map(function(s) return s.returnValue end,
+-- 	traceMH(program, {numsamps=numsamps, lag=lag, verbose=verbose}))
+-- local aca_normal = autoCorrelationArea(samps_normal)
+-- print(string.format("Autocorrelation area of samples: %g", aca_normal))
+
+-- print("------------------")
+
+-- -- Globally tempered inference
+-- print("GLOBALLY TEMPERED INFERENCE")
+-- local samps_globally_tempered = util.map(function(s) return s.returnValue end,
+-- 	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
+-- local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
+-- print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
+
+-- print("------------------")
+
+-- -- Locally tempered inference
+-- print("LOCALLY TEMPERED INFERENCE (LEFT-TO-RIGHT)")
+-- local samps_locally_tempered_ltr = util.map(function(s) return s.returnValue end,
+-- 	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_local_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
+-- local aca_locally_tempered_ltr = autoCorrelationArea(samps_locally_tempered_ltr)
+-- print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered_ltr))
+
+-- print("------------------")
+
+-- -- Locally tempered inference
+-- print("LOCALLY TEMPERED INFERENCE (INSIDE-OUT)")
+-- local samps_locally_tempered_io = util.map(function(s) return s.returnValue end,
+-- 	TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_inside_out, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
+-- local aca_locally_tempered_io = autoCorrelationArea(samps_locally_tempered_io)
+-- print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered_io))
 
 
 -----------------------------------------------------------------
