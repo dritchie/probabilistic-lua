@@ -729,18 +729,18 @@ local T3Kernel = {}
 -- Default parameters
 inf.KernelParams.numT3Steps = 100
 inf.KernelParams.T3StepSize = -1.0
-inf.KernelParams.globalTempMult = 1.0
 
 -- WTF doesn't Sublime syntax highlight this correctly? Looks like there's a bug in the
 -- language definition pertaining to method tables with numbers in their names...
-function T3Kernel:new(numSteps, stepSize, globalTempMult, oracleKernel)
+function T3Kernel:new(numSteps, stepSize, globalTempProg, oracleKernel)
 	local oracle = nil
 	if oracleKernel then
 		oracle = oracleKernel.sampler
 	end
+	globalTempProg = terralib.cast({int,int} -> {double}, globalTempProg)
 	local newobj = 
 	{
-		sampler = hmc.T3_newSampler(numSteps, stepSize, globalTempMult, oracle),
+		sampler = hmc.T3_newSampler(numSteps, stepSize, globalTempProg, oracle),
 		proposalsAccepted = 0,
 		proposalsMade = 0
 	}
@@ -955,7 +955,7 @@ local function T3MCMC(computation, oracleKernel, params)
 	return inf.mcmc(computation,
 					inf.MultiKernel:new({
 						oracleKernel,
-						T3Kernel:new(params.numT3Steps, params.T3StepSize, params.globalTempMult, oracleKernel)
+						T3Kernel:new(params.numT3Steps, params.T3StepSize, params.globalTempProg, oracleKernel)
 					},
 					{"Diffusion", "T3"},
 					{1.0-params.jumpFreq, params.jumpFreq}),
@@ -976,7 +976,7 @@ end
 
 local function T3LMC(computation, params)
 	params = inf.KernelParams:new(params)
-	local oracleKernel = HMCKernel_LMC:new(params.partialMomentumAlpha, params.useSeparateGradientProgram)
+	local oracleKernel = HMCKernel_Langevin:new(params.partialMomentumAlpha, params.useSeparateGradientProgram)
 	return T3MCMC(computation, oracleKernel, params)
 end
 

@@ -27,6 +27,8 @@ extern "C"
 	#include "num.h"
 }
 
+typedef double(*GlobalTemperingProgram)(int, int);
+
 
 // A custom subclass of prob_grad_ad that evaluates log probabilities
 // by interpolating two function pointer functions.
@@ -69,8 +71,8 @@ namespace stan
 		{
 		private:
 
-      		// Parameter controlling global tempering (< 1)
-      		double _globalTempMult;
+      		// Function controlling global tempering
+      		GlobalTemperingProgram _globalTempProg;
 
       		// Number of leapfrog steps to take
       		int _L;
@@ -142,7 +144,7 @@ namespace stan
 				const std::vector<double>& params_r,
 				const std::vector<int>& params_i,
 				int L = 100,
-				double globalTempMult = 1.0,
+				GlobalTemperingProgram globalTempProg = NULL,
 				stan::mcmc::ppl_hmc<BaseRNG>* oracle = NULL,
 				double epsilon = -1,
 				double epsilon_pm = 0.0,
@@ -159,7 +161,7 @@ namespace stan
 								epsilon_pm,
 								epsilon_adapt,
 								base_rng),
-			_globalTempMult(globalTempMult),
+			_globalTempProg(globalTempProg),
 			_L(L),
 			_oracle(oracle)
 			{
@@ -195,8 +197,6 @@ namespace stan
 				this->_epsilon_last = this->_epsilon;
 
 				// Do leapfrog steps
-				double globalTemp = 1.0;
-				double sqrtTempMult = sqrt(_globalTempMult);
 				for (unsigned int i = 0; i < _L; i++)
 				{
 					double alpha = ((double)i)/(_L-1);
@@ -207,10 +207,7 @@ namespace stan
 					for (unsigned int i = 0; i < _newVarIndices.size(); i++)
 						this->_inv_masses[_newVarIndices[i]] = alpha;
 
-					if (alpha <= 0.5)
-						globalTemp *= _globalTempMult;
-					else
-						globalTemp /= _globalTempMult;
+					double globalTemp = _globalTempProg ? _globalTempProg(i, _L-1) : 1.0;
 					model.setGlobalTemp(globalTemp);
 
 					// newlogp = tempered_diag_leapfrog(this->_model, this->_z, this->_inv_masses,

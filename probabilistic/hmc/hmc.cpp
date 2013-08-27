@@ -219,21 +219,21 @@ struct T3_SamplerState
 public:
 	int _steps;
 	double _stepSize;
-	double _globalTempMult;
+	GlobalTemperingProgram _globTempProg;
 	HMC_SamplerState* _hmcs;
 	InterpolatedFunctionPointerModel model;
 	stan::mcmc::t3<boost::mt19937>* sampler;
-	T3_SamplerState(int steps, double stepSize, double globalTempMult, HMC_SamplerState* hmcs)
-		: model(), sampler(NULL), _steps(steps), _stepSize(stepSize), _globalTempMult(globalTempMult),
+	T3_SamplerState(int steps, double stepSize, GlobalTemperingProgram gTempProg, HMC_SamplerState* hmcs)
+		: model(), sampler(NULL), _steps(steps), _stepSize(stepSize), _globTempProg(gTempProg),
 		  _hmcs(hmcs) {}
 	~T3_SamplerState() { if (sampler) delete sampler; }
 };
 
 extern "C"
 {
-	EXPORT T3_SamplerState* T3_newSampler(int steps, double stepSize, double globalTempMult, HMC_SamplerState* oracle)
+	EXPORT T3_SamplerState* T3_newSampler(int steps, double stepSize, GlobalTemperingProgram globTempProg, HMC_SamplerState* oracle)
 	{
-		return new T3_SamplerState(steps, stepSize, globalTempMult, oracle);
+		return new T3_SamplerState(steps, stepSize, globTempProg, oracle);
 	}
 
 	EXPORT void T3_deleteSampler(T3_SamplerState* s)
@@ -260,7 +260,7 @@ extern "C"
 			std::vector<int> params_i;
 			bool doAdapt = s->_stepSize <= 0.0;
 			s->sampler = new stan::mcmc::t3<boost::mt19937>(s->model, params_r, params_i,
-															s->_steps, s->_globalTempMult, s->_hmc->sampler,
+															s->_steps, s->_globTempProg, s->_hmcs->sampler,
 															s->_stepSize, 0.0, doAdapt);
 		}
 		else
