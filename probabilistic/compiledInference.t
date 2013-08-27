@@ -734,13 +734,13 @@ inf.KernelParams.globalTempMult = 1.0
 -- WTF doesn't Sublime syntax highlight this correctly? Looks like there's a bug in the
 -- language definition pertaining to method tables with numbers in their names...
 function T3Kernel:new(numSteps, stepSize, globalTempMult, oracleKernel)
-	local lo = nil
+	local oracle = nil
 	if oracleKernel then
-		lo = oracleKernel.sampler
+		oracle = oracleKernel.sampler
 	end
 	local newobj = 
 	{
-		sampler = hmc.T3_newSampler(numSteps, stepSize, globalTempMult, lo),
+		sampler = hmc.T3_newSampler(numSteps, stepSize, globalTempMult, oracle),
 		proposalsAccepted = 0,
 		proposalsMade = 0
 	}
@@ -951,9 +951,7 @@ local function HMC(computation, params)
 					params)
 end
 
-local function T3HMC(computation, params)
-	params = inf.KernelParams:new(params)
-	local oracleKernel = HMCKernel_NUTS:new()
+local function T3MCMC(computation, oracleKernel, params)
 	return inf.mcmc(computation,
 					inf.MultiKernel:new({
 						oracleKernel,
@@ -962,6 +960,24 @@ local function T3HMC(computation, params)
 					{"Diffusion", "T3"},
 					{1.0-params.jumpFreq, params.jumpFreq}),
 					params)
+end
+
+local function T3NUTS(computation, params)
+	params = inf.KernelParams:new(params)
+	local oracleKernel = HMCKernel_NUTS:new(params.useSeparateGradientProgram)
+	return T3MCMC(computation, oracleKernel, params)
+end
+
+local function T3HMC(computation, params)
+	params = inf.KernelParams:new(params)
+	local oracleKernel = HMCKernel_HMC:new(params.numHMCSteps, params.useSeparateGradientProgram)
+	return T3MCMC(computation, oracleKernel, params)
+end
+
+local function T3LMC(computation, params)
+	params = inf.KernelParams:new(params)
+	local oracleKernel = HMCKernel_LMC:new(params.partialMomentumAlpha, params.useSeparateGradientProgram)
+	return T3MCMC(computation, oracleKernel, params)
 end
 
 -- Module exports
@@ -975,7 +991,9 @@ return
 	NUTS = NUTS,
 	HMC = HMC,
 	LARJLMC = LARJLMC,
-	T3HMC = T3HMC
+	T3NUTS = T3NUTS,
+	T3HMC = T3HMC,
+	T3LMC = T3LMC
 }
 
 

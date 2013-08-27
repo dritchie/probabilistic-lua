@@ -55,13 +55,6 @@ public:
 					 alpha * (*((stan::agrad::var*)&lp2));
 		return globalTemp * interp;
 	}
-	virtual double grad_log_prob(std::vector<double>& params_r, 
-                                   std::vector<int>& params_i, 
-                                   std::vector<double>& gradient,
-                                   std::ostream* output_stream = 0)
-	{
-		return stan::model::prob_grad_ad::grad_log_prob(params_r, params_i, gradient, output_stream);
-	}
 };
 
 namespace stan
@@ -195,9 +188,9 @@ namespace stan
 
 				double newlogp;
 
-				// // TODO: Oracle-related stuff?
-				// if (_oracle != NULL) 
-				// 	this->_epsilon = _oracle->get_epsilon();
+				// Get step size from oracle
+				if (_oracle != NULL) 
+					this->_epsilon = _oracle->get_epsilon();
 
 				this->_epsilon_last = this->_epsilon;
 

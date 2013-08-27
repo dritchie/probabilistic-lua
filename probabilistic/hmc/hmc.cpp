@@ -260,7 +260,7 @@ extern "C"
 			std::vector<int> params_i;
 			bool doAdapt = s->_stepSize <= 0.0;
 			s->sampler = new stan::mcmc::t3<boost::mt19937>(s->model, params_r, params_i,
-															s->_steps, s->_globalTempMult, s->sampler,
+															s->_steps, s->_globalTempMult, s->_hmc->sampler,
 															s->_stepSize, 0.0, doAdapt);
 		}
 		else
