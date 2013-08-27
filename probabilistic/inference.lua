@@ -489,15 +489,15 @@ local LARJKernel = {}
 -- Default parameter values
 KernelParams.annealIntervals = 0
 KernelParams.annealStepsPerInterval = 1
-KernelParams.globalTempMult = 1.0
+KernelParams.globalTempProg = nil
 KernelParams.jumpFreq = 0.1
 
-function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval, globalTempMult)
+function LARJKernel:new(diffusionKernel, annealIntervals, annealStepsPerInterval, globalTempProg)
 	local newobj = {
 		diffusionKernel = diffusionKernel,
 		annealIntervals = annealIntervals,
 		annealStepsPerInterval = annealStepsPerInterval,
-		globalTempMult = globalTempMult,
+		globalTempProg = globalTempProg,
 
 		proposalsMade = 0,
 		proposalsAccepted = 0,
@@ -568,14 +568,9 @@ function LARJKernel:next(currState, hyperparams)
 		-- for DEBUG output
 		local accepts = {}
 
-		local globalTemp = 1.0
 		for aInterval=0,self.annealIntervals-1 do
 			local alpha = aInterval/(self.annealIntervals-1)
-			if alpha <= 0.5 then
-				globalTemp = globalTemp * self.globalTempMult
-			else
-				globalTemp = globalTemp / self.globalTempMult
-			end
+			local globalTemp = self.globalTempProg and self.globalTempProg(aInterval, self.annealIntervals-1) or 1.0
 			lerpTrace.alpha:setValue(alpha)
 			lerpTrace.globalTemp:setValue(globalTemp)
 			self.diffusionKernel:tellLARJStatus(alpha, oldVars, newVars)
@@ -722,7 +717,7 @@ local function LARJMCMC(computation, diffusionKernel, params)
 				MultiKernel:new({
 									diffusionKernel,
 									LARJKernel:new(diffusionKernel, params.annealIntervals, params.annealStepsPerInterval,
-												   params.globalTempMult)
+												   params.globalTempProg)
 								},
 								{"Diffusion", "LARJ"},
 								{1.0-params.jumpFreq, params.jumpFreq}),

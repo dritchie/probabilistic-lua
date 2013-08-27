@@ -6,3 +6,5 @@ output_smooth.png
 chain_dynamics.mp4
 grad_dynamics.mp4
 gradientTestImg.png
+test/saved/chain_dynamics_lmc.mp4
+test/saved/chain_dynamics_gd.mp4

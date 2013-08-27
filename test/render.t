@@ -132,11 +132,11 @@ local renderbuffer_normal = render.Framebuffer_new(render.Framebuffer_width(targ
 local renderbuffer_hmc = render.Framebuffer_new(render.Framebuffer_width(targetMask),
 												   render.Framebuffer_height(targetMask),
 												   hmc.makeNum(0.0))
+
+-- NOTE: Maybe we can make these hyperparameters of the inference?
 local minMaxSmoothing = 5
 local tightFieldSmoothing = 0.0005
 local looseFieldSmoothing = 0.02
--- local tightFieldSmoothing = 0.00025
--- local looseFieldSmoothing = 0.025
 local fieldBlend = 0.9
 local zeroPixelWeight = 1.0
 
@@ -171,12 +171,8 @@ local function generate(dim)
 	local pos_max = 1.0
 	local radius_min = 0.025
 	local radius_max= 0.1
-	-- local pos_mean = 0.5
-	-- local pos_sd = 0.25
-	-- local radius_k = 10.0
-	-- local radius_theta = 0.5
-	-- local radius_mult = 0.0075
-	local constraintTightness = 0.05
+	local constraintTightness = 0.5
+	-- local constraintTightness = 0.05
 
 	-- Prior
 	local numCircles = dim or poisson({numCircles_poissonLambda}, {isStructural=true})
@@ -185,9 +181,6 @@ local function generate(dim)
 		local r = uniformWithFalloff({radius_min, radius_max})
 		local x = uniformWithFalloff({pos_min, pos_max})
 		local y = uniformWithFalloff({pos_min, pos_max})
-		-- local r = radius_mult*gamma({radius_k, radius_theta})
-		-- local x = gaussian({pos_mean, pos_sd})
-		-- local y = gaussian({pos_mean, pos_sd})
 		table.insert(circles, {x=x, y=y, r=r})
 	end
 
@@ -209,6 +202,14 @@ end
 
 ----------------------------
 
+-- Global tempering schedules
+
+local function temp_linear(step, maxStep)
+	return 2.0*math.abs(step/maxStep - 0.5)
+end
+
+----------------------------
+
 local verbose = true
 
 
@@ -216,15 +217,14 @@ math.randomseed(os.time())
 
 local t1 = os.clock()
 
--- local samps = GradientDescent(makeFixedDimProg(30), {numsamps=1000, gdStepSize=0.00025,
+-- local samps = GradientDescent(makeFixedDimProg(50), {numsamps=500, gdStepSize=0.0000025,
 -- 													 gdInitialTemp=1.0, gdFinalTemp=1.0,
 -- 													 gdInitialMass=0.0, gdFinalMass=0.0, verbose=verbose})
 --local samps = traceMH(makeFixedDimProg(50), {numsamps=500, verbose=verbose})
-local samps = LMC(makeFixedDimProg(50), {numsamps=500, partialMomenutmAlpha=0.0, verbose=verbose})
---local samps = HMC(makeFixedDimProg(30), {numsamps=10, numHMCSteps=100, verbose=verbose})
---local samps = LARJLMC(generate, {numsamps=2000, jumpFreq=0.05, annealIntervals=0, annealStepsPerInterval=5, verbose=verbose})
---local samps = T3HMC(generate, {numsamps=1000, jumpFreq=0.05, numT3Steps=50, T3StepSize=0.001, verbose=verbose})
---local samps = LARJDriftMH(generate, {numsamps=2000, jumpFreq=0.05, annealIntervals=0, annealStepsPerInterval=5, defaultBandWidth=0.03, verbose=verbose})
+--local samps = LMC(makeFixedDimProg(50), {numsamps=500, verbose=verbose})
+--local samps = LARJTraceMH(generate, {numsamps=1000, jumpFreq=0.1, globalTempProg=nil, annealIntervals=100, annealStepsPerInterval=1, verbose=verbose})
+local samps = LARJLMC(generate, {numsamps=1000, jumpFreq=0.1, globalTempProg=nil, annealIntervals=100, annealStepsPerInterval=1, verbose=verbose})
+
 local circles
 local finallp
 circles, finallp = sampleMAP(samps)
