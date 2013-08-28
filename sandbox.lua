@@ -255,7 +255,7 @@ local temperedTransitionsFreq = 1.0
 -- Normal inference
 print("NORMAL INFERENCE")
 local samps_normal = util.map(function(s) return s.returnValue end,
-	traceMH(isingVarying, {numsamps=numsamps, lag=lag, verbose=verbose}))
+	traceMH(ising, {numsamps=numsamps, lag=lag, verbose=verbose}))
 local aca_normal = autoCorrelationArea(samps_normal)
 print(string.format("Autocorrelation area of samples: %g", aca_normal))
 
@@ -264,7 +264,7 @@ print("------------------")
 -- Globally tempered inference
 print("GLOBALLY TEMPERED INFERENCE")
 local samps_globally_tempered = util.map(function(s) return s.returnValue end,
-	TemperedTraceMH(isingVarying, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
+	TemperedTraceMH(ising, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
 local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
 print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
@@ -274,7 +274,7 @@ print("------------------")
 -- Locally tempered inference
 print("LOCALLY TEMPERED INFERENCE")
 local samps_locally_tempered = util.map(function(s) return s.returnValue end,
-	TemperedTraceMH(isingVarying, {scheduleGenerator=scheduleGen_ising_affinity_based, temperedTransitionsFreq=temperedTransitionsFreq,
+	TemperedTraceMH(ising, {scheduleGenerator=scheduleGen_ising_inside_out, temperedTransitionsFreq=temperedTransitionsFreq,
 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
 local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
 print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))

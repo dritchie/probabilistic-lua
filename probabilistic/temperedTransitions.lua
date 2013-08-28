@@ -1,5 +1,6 @@
 
 local inf = require("probabilistic.inference")
+local util = require("probabilistic.util")
 
 -- Kernel that performs tempered transitions using a 
 -- specified annealing schedule.
@@ -52,6 +53,14 @@ function TemperedTransitionsKernel:next(currState, hyperparams)
 		return newTrace
 	end
 
+	-- -- DEBUG: Tracking energy jumps as a function of annealing step
+	-- if not self.energyJumpLog then
+	-- 	self.energyJumpLog = {}
+	-- 	for i=0,self.annealIntervals-1 do
+	-- 		self.energyJumpLog[i] = {}
+	-- 	end
+	-- end
+
 	-- print("===================")
 	-- print("--- INITIAL STATE ---")
 	-- for i,v in ipairs(currState.returnValue) do print(v) end
@@ -73,12 +82,7 @@ function TemperedTransitionsKernel:next(currState, hyperparams)
 		local numerlp = nextTrace.logprob
 		annealingLpRatio = annealingLpRatio + (numerlp - denomlp)
 
-		-- print(numerlp - denomlp)
-		-- if not self.avgLpDiff then
-		-- 	self.avgLpDiff = (numerlp - denomlp)
-		-- else
-		-- 	self.avgLpDiff = 0.5*self.avgLpDiff + 0.5*(numerlp - denomlp)
-		-- end
+		-- table.insert(self.energyJumpLog[aInterval], (numerlp - denomlp))
 
 		for aStep=1,self.annealStepsPerInterval do
 			nextTrace = self.innerKernel:next(nextTrace)
@@ -95,18 +99,9 @@ function TemperedTransitionsKernel:next(currState, hyperparams)
 	nextTrace = self.innerKernel:releaseControl(nextTrace)
 	nextTrace = self:assumeControl(nextTrace)
 
-	-- print(self.avgLpDiff)
-
 	-- print("--- FINAL STATE ---")
 	-- for i,v in ipairs(nextTrace.returnValue) do print(v) end
 	-- print(string.format("Acceptance Prob: %g", annealingLpRatio))
-
-	-- if not self.avgLpRatio then
-	-- 	self.avgLpRatio = annealingLpRatio
-	-- else
-	-- 	self.avgLpRatio = 0.75*self.avgLpRatio + 0.25*annealingLpRatio
-	-- end
-	-- print(self.avgLpRatio)
 
 	if nextTrace.conditionsSatisfied and math.log(math.random()) < annealingLpRatio then
 		--print("ACCEPTED")
@@ -132,6 +127,16 @@ function TemperedTransitionsKernel:stats()
 		print(string.format("Annealing acceptance ratio: %g (%u/%u)", self.annealingProposalsAccepted/self.annealingProposalsMade,
 																	  self.annealingProposalsAccepted, self.annealingProposalsMade))
 	end
+
+	-- -- Output the energy jump log
+	-- local logfile = io.open("energyJumpLog.csv", "w")
+	-- logfile:write("iter,avgEnergyJump\n")
+	-- for i=0,self.annealIntervals-1 do
+	-- 	local jumps = self.energyJumpLog[i]
+	-- 	local avg = util.sumtable(jumps) / #jumps
+	-- 	logfile:write(string.format("%d,%g\n", i+1, avg))
+	-- end
+	-- logfile:close()
 end
 
 
