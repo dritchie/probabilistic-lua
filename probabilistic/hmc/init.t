@@ -58,7 +58,7 @@ local eigendir = string.format("%s/lib/eigen_3.1.2", stanroot)
 local boostdir = string.format("%s/lib/boost_1.53.0", stanroot)
 
 -- Compile the the shared library, if it doesn't exist.
-local sourcefile = debug.getinfo(1, "S").source
+local sourcefile = debug.getinfo(1, "S").source:gsub("@", "")
 local soname = sourcefile:gsub("init.t", "libhmc.so")
 local f = io.open(soname, "r")
 if f then

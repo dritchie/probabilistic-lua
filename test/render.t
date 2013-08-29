@@ -223,8 +223,8 @@ local t1 = os.clock()
 --local samps = traceMH(makeFixedDimProg(50), {numsamps=500, verbose=verbose})
 --local samps = LMC(makeFixedDimProg(50), {numsamps=500, verbose=verbose})
 --local samps = LARJTraceMH(generate, {numsamps=1000, jumpFreq=0.1, globalTempProg=nil, annealIntervals=100, annealStepsPerInterval=1, verbose=verbose})
---local samps = LARJLMC(generate, {numsamps=1000, jumpFreq=0.1, globalTempProg=nil, annealIntervals=100, annealStepsPerInterval=1, verbose=verbose})
-local samps = T3LMC(generate, {numsamps=1000, jumpFreq=0.1, globalTempProg=nil, numT3Steps=50, verbose=verbose})
+local samps = LARJLMC(generate, {numsamps=1000, jumpFreq=0.1, globalTempProg=nil, annealIntervals=50, annealStepsPerInterval=1, verbose=verbose})
+--local samps = T3LMC(generate, {numsamps=1000, jumpFreq=0.1, globalTempProg=nil, numT3Steps=50, verbose=verbose})
 
 local circles
 local finallp

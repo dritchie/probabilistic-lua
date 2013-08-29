@@ -1,7 +1,7 @@
 local util = require("probabilistic.util")
 
 
-local sourcefile = debug.getinfo(1, "S").source
+local sourcefile = debug.getinfo(1, "S").source:gsub("@", "")
 local dir = sourcefile:gsub("init.t", "")
 
 
