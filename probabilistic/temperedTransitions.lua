@@ -129,12 +129,17 @@ function TemperedTransitionsKernel:stats()
 	end
 
 	-- -- Output the energy jump log
-	-- local logfile = io.open("energyJumpLog.csv", "w")
-	-- logfile:write("iter,avgEnergyJump\n")
+	-- -- local logfile = io.open("energyJumpLog.csv", "w")
+	-- -- logfile:write("iter,avgEnergyJump\n")
+	-- local logfile = io.open("fullEnergyJumpLog.csv", "w")
+	-- logfile:write("iter,energyJump\n")
 	-- for i=0,self.annealIntervals-1 do
 	-- 	local jumps = self.energyJumpLog[i]
-	-- 	local avg = util.sumtable(jumps) / #jumps
-	-- 	logfile:write(string.format("%d,%g\n", i+1, avg))
+	-- 	for i,v in ipairs(jumps) do
+	-- 		logfile:write(string.format("%d,%g\n", i+1, v))
+	-- 	end
+	-- 	--local avg = util.sumtable(jumps) / #jumps
+	-- 	--logfile:write(string.format("%d,%g\n", i+1, avg))
 	-- end
 	-- logfile:close()
 end
