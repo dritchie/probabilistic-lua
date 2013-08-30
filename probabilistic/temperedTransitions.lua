@@ -135,11 +135,11 @@ function TemperedTransitionsKernel:stats()
 	-- logfile:write("iter,energyJump\n")
 	-- for i=0,self.annealIntervals-1 do
 	-- 	local jumps = self.energyJumpLog[i]
-	-- 	for i,v in ipairs(jumps) do
-	-- 		logfile:write(string.format("%d,%g\n", i+1, v))
+	-- 	for j,v in ipairs(jumps) do
+	-- 		logfile:write(string.format("%d,%.8f\n", i+1, v))
 	-- 	end
-	-- 	--local avg = util.sumtable(jumps) / #jumps
-	-- 	--logfile:write(string.format("%d,%g\n", i+1, avg))
+	-- 	-- local avg = util.sumtable(jumps) / #jumps
+	-- 	-- logfile:write(string.format("%d,%g\n", i+1, avg))
 	-- end
 	-- logfile:close()
 end
