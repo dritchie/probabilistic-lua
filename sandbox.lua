@@ -116,7 +116,6 @@ function Vector:__div(s)
 	return newVec
 end
 
-
 -- A 1D Ising model
 local numSites = 10
 -- local numSites = 4
@@ -142,6 +141,48 @@ local function isingVarying(temps)
 	siteVals = Vector:new(siteVals)
 	for i=1,numSites-1 do
 		factor(temps[i]*affinities[i]*siteVals[i]*siteVals[i+1])
+	end
+	return siteVals
+end
+
+-- A 2D Ising model
+local numSiteRows = 6
+local numSiteCols = 6
+local prior2d = 0.5
+local affinity2d = 20.0
+local function replicate2d(numrows, numcols, proc)
+	return replicate(numrows, function() return replicate(numcols, proc) end)
+end
+
+local function uniformTemps2d(temp)
+	temps = {}
+	temps["rowtemps"] = replicate2d(numSiteRows, numSiteCols-1, function() return temp end)
+	temps["coltemps"] = replicate2d(numSiteRows-1, numSiteCols, function() return temp end)
+	return temps
+end
+
+local function reshape2d_to_1d(t)
+	new = {}
+	for k1,v1 in pairs(t) do
+		for k2,v2 in pairs(v1) do
+			table.insert(new, v2)
+		end
+	end
+	return new
+end
+
+local function ising2d(temps)
+	temps = temps or uniformTemps2d(1.0)
+	local siteVals = replicate2d(numSiteRows, numSiteCols, function() if util.int2bool(flip({prior2d})) then return 1.0 else return -1.0 end end)
+	for i=1,numSiteRows do
+		for j=1,numSiteCols-1 do
+			factor(temps["rowtemps"][i][j]*affinity2d*siteVals[i][j]*siteVals[i][j+1])
+		end
+	end
+	for i=1,numSiteRows-1 do
+		for j=1,numSiteCols do
+			factor(temps["coltemps"][i][j]*affinity2d*siteVals[i][j]*siteVals[i+1][j])
+		end
 	end
 	return siteVals
 end
@@ -225,8 +266,43 @@ local function scheduleGen_ising_affinity_based(annealStep, maxAnnealStep)
 	return schedule
 end
 
---------------------------------
+local function scheduleGen_ising2d_global(annealStep, maxAnnealStep)
+	local a = annealStep/maxAnnealStep
+	--local val = 2.0*math.abs(a - 0.5)
+	local val = (2.0*a - 1); val = val*val
+	return uniformTemps2d(val)
+end
 
+local function scheduleGen_ising2d_zigzag(annealStep, maxAnnealStep)
+	-- This is written in a form that iteratively "withdraws" temperature along a zigzag.
+	local val = 2 * (0.5 - (math.abs(0.5 - (annealStep-1) / (maxAnnealStep-1)))) * (numSiteRows * numSiteCols)
+	local temps = uniformTemps2d(1.0)
+	-- return temps
+	for i=1,numSiteRows do
+		if (val == 0) then break end
+		for j=1,numSiteCols do
+			if (val == 0) then break end
+			
+			local withdrawl = math.min(1, val)
+			val = val - withdrawl
+
+			if (j < numSiteCols) then
+				local col = j
+				if (i % 2 == 0) then col = numSiteCols - col end
+				temps["rowtemps"][i][col] = 1 - withdrawl
+			end
+
+			if (i > 1) then
+				local col = j
+				if (i % 2 == 0) then col = numSiteCols + 1 - col end
+				temps["coltemps"][i-1][col] = 1 - withdrawl
+			end
+		end
+	end
+	return temps
+end
+
+--------------------------------
 
 -- Which experiment to run
 ----------------------------
@@ -244,40 +320,40 @@ local verbose = true
 
 -- local annealIntervals = 200
 -- local annealStepsPerInterval = numSites
-local annealIntervals = 1000
-local annealStepsPerInterval = 1
-local temperedTransitionsFreq = 1.0
+local annealIntervals = 200
+local annealStepsPerInterval = 10
+local temperedTransitionsFreq = 0.1
 
 -----------------------------------------------------------------
 
--- Running stuff with varying affinities.
+-- -- Running stuff with varying affinities.
 
--- Normal inference
-print("NORMAL INFERENCE")
-local samps_normal = util.map(function(s) return s.returnValue end,
-	traceMH(ising, {numsamps=numsamps, lag=lag, verbose=verbose}))
-local aca_normal = autoCorrelationArea(samps_normal)
-print(string.format("Autocorrelation area of samples: %g", aca_normal))
+-- -- Normal inference
+-- print("NORMAL INFERENCE")
+-- local samps_normal = util.map(function(s) return s.returnValue end,
+-- 	traceMH(ising, {numsamps=numsamps, lag=lag, verbose=verbose}))
+-- local aca_normal = autoCorrelationArea(samps_normal)
+-- print(string.format("Autocorrelation area of samples: %g", aca_normal))
 
-print("------------------")
+-- print("------------------")
 
--- Globally tempered inference
-print("GLOBALLY TEMPERED INFERENCE")
-local samps_globally_tempered = util.map(function(s) return s.returnValue end,
-	TemperedTraceMH(ising, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
-	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
-local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
-print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
+-- -- Globally tempered inference
+-- print("GLOBALLY TEMPERED INFERENCE")
+-- local samps_globally_tempered = util.map(function(s) return s.returnValue end,
+-- 	TemperedTraceMH(ising, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
+-- local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
+-- print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
 
-print("------------------")
+-- print("------------------")
 
--- Locally tempered inference
-print("LOCALLY TEMPERED INFERENCE")
-local samps_locally_tempered = util.map(function(s) return s.returnValue end,
-	TemperedTraceMH(ising, {scheduleGenerator=scheduleGen_ising_inside_out, temperedTransitionsFreq=temperedTransitionsFreq,
-	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
-local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
-print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))
+-- -- Locally tempered inference
+-- print("LOCALLY TEMPERED INFERENCE")
+-- local samps_locally_tempered = util.map(function(s) return s.returnValue end,
+-- 	TemperedTraceMH(ising, {scheduleGenerator=scheduleGen_ising_inside_out, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
+-- local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
+-- print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))
 
 -----------------------------------------------------------------
 
@@ -323,7 +399,8 @@ print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered)
 
 -----------------------------------------------------------------
 
--- -- Autocorrelation over multiple runs experiment
+-- Autocorrelation over multiple runs experiment with 1D Ising
+-- local program = ising
 -- local runs = 10
 -- local acf_normal = {}
 -- local acf_global = {}
@@ -358,6 +435,41 @@ print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered)
 -- acf_global_file:close()
 -- acf_local_file:close()
 
+-- Autocorrelation over multiple runs experiment with 2D Ising
+local program = ising2d
+local runs = 20
+local acf_normal = {}
+local acf_global = {}
+local acf_local = {}
+
+for i=1,runs do
+	print(i)
+	local samps_normal = util.map(function(s) return Vector:new(reshape2d_to_1d(s.returnValue)) end,
+		traceMH(program, {numsamps=numsamps, lag=lag}))
+	acf_normal[i] = autocorrelation(samps_normal)
+
+	local samps_globally_tempered = util.map(function(s) return Vector:new(reshape2d_to_1d(s.returnValue)) end,
+		TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising2d_global, temperedTransitionsFreq=temperedTransitionsFreq,
+		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
+	acf_global[i] = autocorrelation(samps_globally_tempered)
+
+	local samps_locally_tempered = util.map(function(s) return Vector:new(reshape2d_to_1d(s.returnValue)) end,
+		TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising2d_zigzag, temperedTransitionsFreq=temperedTransitionsFreq,
+		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
+	acf_local[i] = autocorrelation(samps_locally_tempered)
+end
+
+local acf_normal_file = io.open("acf_normal.csv", "w")
+local acf_global_file = io.open("acf_global.csv", "w")
+local acf_local_file = io.open("acf_local.csv", "w")
+for i=1,numsamps do
+	acf_normal_file:write(table.concat(util.map(function(s) return s[i] end, acf_normal), ",") .. "\n")
+	acf_global_file:write(table.concat(util.map(function(s) return s[i] end, acf_global), ",") .. "\n")
+	acf_local_file:write(table.concat(util.map(function(s) return s[i] end, acf_local), ",") .. "\n")
+end
+acf_normal_file:close()
+acf_global_file:close()
+acf_local_file:close()
 
 -----------------------------------------------------------------
 
@@ -376,7 +488,6 @@ print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered)
 -- local aca_local_file = io.open("aca_local.csv", "w")
 
 -- for i=minSites,maxSites,sitesStepSize do
--- 	print(i)
 -- 	numSites = i
 -- 	annealStepsPerInterval = numSites
 -- 	aca_normal[i] = {}
@@ -405,8 +516,51 @@ print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered)
 -- aca_local_file:close()
 
 
-
 -----------------------------------------------------------------
+
+-- Render the graphs
+--util.wait("Rscript plot.r")
+
+-- -- Autocorrelation area over anneal steps experiment
+-- runs = 5
+-- local minSteps = 10
+-- local maxSteps = 50
+-- local stepsStepSize = 5
+-- local aca_normal = {}
+-- local aca_global = {}
+-- local aca_local = {}
+
+-- local aca_normal_file = io.open("aca_normal.csv", "w")
+-- local aca_global_file = io.open("aca_global.csv", "w")
+-- local aca_local_file = io.open("aca_local.csv", "w")
+
+-- for i=minSteps,maxSteps,stepsStepSize do
+-- 	annealStepsPerInterval = i
+-- 	aca_normal[i] = {}
+-- 	aca_global[i] = {}
+-- 	aca_local[i] = {}
+-- 	for j=1,runs do
+-- 		print(i, j)
+-- 		local samps_normal = util.map(function(s) return s.returnValue end,
+-- 			traceMH(program, {numsamps=numsamps, lag=lag}))
+-- 		aca_normal[i][j] = autoCorrelationArea(samps_normal)
+-- 		local samps_global = util.map(function(s) return s.returnValue end,
+-- 			TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_global, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 			 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
+-- 		aca_global[i][j] = autoCorrelationArea(samps_global)
+
+-- 		local samps_local = util.map(function(s) return s.returnValue end,
+-- 			TemperedTraceMH(program, {scheduleGenerator=scheduleGen_ising_local_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 			 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
+-- 		aca_local[i][j] = autoCorrelationArea(samps_local)
+-- 	end
+-- 	aca_normal_file:write(table.concat(aca_normal[i], ",") .. "\n")
+-- 	aca_global_file:write(table.concat(aca_global[i], ",") .. "\n")
+-- 	aca_local_file:write(table.concat(aca_local[i], ",") .. "\n")
+-- end
+-- aca_normal_file:close()
+-- aca_global_file:close()
+-- aca_local_file:close()
 
 
 -- Render the graphs
