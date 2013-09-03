@@ -3,6 +3,7 @@ local util = require("probabilistic.util")
 local gmm = require("models.gmm")
 local ising1d = require("models.ising1d")
 local ising2d = require("models.ising2d")
+local bayesChain = require("models.bayesChain")
 
 math.randomseed(os.time())
 
@@ -12,16 +13,19 @@ local lag = 1
 local verbose = true
 
 local annealIntervals = 500
-local annealStepsPerInterval = 1
+local annealStepsPerInterval = 10
 local temperedTransitionsFreq = 1.0
 
 -----------------------------------------------------------------
 
 -- -- Running basic experiments
 
--- local program = ising1d.ising1d
--- local globalSched = ising1d.scheduleGen_ising1d_global
--- local localSched = ising1d.scheduleGen_ising1d_left_to_right
+-- -- local program = ising1d.ising1d
+-- -- local globalSched = ising1d.scheduleGen_ising1d_global
+-- -- local localSched = ising1d.scheduleGen_ising1d_left_to_right
+-- local program = bayesChain.bayesChain
+-- local globalSched = bayesChain.scheduleGen_global
+-- local localSched = bayesChain.scheduleGen_left_to_right
 
 -- -- Normal inference
 -- print("NORMAL INFERENCE")
@@ -91,8 +95,45 @@ local temperedTransitionsFreq = 1.0
 
 
 
--- Autocorrelation over multiple runs experiment with 2D Ising
-local program = ising2d.ising2d
+-- -- Autocorrelation over multiple runs experiment with 2D Ising
+-- local program = ising2d.ising2d
+-- local runs = 20
+-- local acf_normal = {}
+-- local acf_global = {}
+-- local acf_local = {}
+
+-- for i=1,runs do
+-- 	print(i)
+-- 	local samps_normal = util.map(function(s) return s.returnValue end,
+-- 		traceMH(program, {numsamps=numsamps, lag=lag}))
+-- 	acf_normal[i] = autocorrelation(samps_normal)
+
+-- 	local samps_globally_tempered = util.map(function(s) return s.returnValue end,
+-- 		TemperedTraceMH(program, {scheduleGenerator=ising2d.scheduleGen_ising2d_global, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
+-- 	acf_global[i] = autocorrelation(samps_globally_tempered)
+
+-- 	local samps_locally_tempered = util.map(function(s) return s.returnValue end,
+-- 		TemperedTraceMH(program, {scheduleGenerator=ising2d.scheduleGen_ising2d_zigzag, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
+-- 	acf_local[i] = autocorrelation(samps_locally_tempered)
+-- end
+
+-- local acf_normal_file = io.open("acf_normal.csv", "w")
+-- local acf_global_file = io.open("acf_global.csv", "w")
+-- local acf_local_file = io.open("acf_local.csv", "w")
+-- for i=1,numsamps do
+-- 	acf_normal_file:write(table.concat(util.map(function(s) return s[i] end, acf_normal), ",") .. "\n")
+-- 	acf_global_file:write(table.concat(util.map(function(s) return s[i] end, acf_global), ",") .. "\n")
+-- 	acf_local_file:write(table.concat(util.map(function(s) return s[i] end, acf_local), ",") .. "\n")
+-- end
+-- acf_normal_file:close()
+-- acf_global_file:close()
+-- acf_local_file:close()
+
+
+-- Autocorrelation over multiple runs experiment with Bayes Chain
+local program = bayesChain.bayesChain
 local runs = 20
 local acf_normal = {}
 local acf_global = {}
@@ -105,12 +146,12 @@ for i=1,runs do
 	acf_normal[i] = autocorrelation(samps_normal)
 
 	local samps_globally_tempered = util.map(function(s) return s.returnValue end,
-		TemperedTraceMH(program, {scheduleGenerator=ising2d.scheduleGen_ising2d_global, temperedTransitionsFreq=temperedTransitionsFreq,
+		TemperedTraceMH(program, {scheduleGenerator=bayesChain.scheduleGen_global, temperedTransitionsFreq=temperedTransitionsFreq,
 		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
 	acf_global[i] = autocorrelation(samps_globally_tempered)
 
 	local samps_locally_tempered = util.map(function(s) return s.returnValue end,
-		TemperedTraceMH(program, {scheduleGenerator=ising2d.scheduleGen_ising2d_zigzag, temperedTransitionsFreq=temperedTransitionsFreq,
+		TemperedTraceMH(program, {scheduleGenerator=bayesChain.scheduleGen_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
 		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
 	acf_local[i] = autocorrelation(samps_locally_tempered)
 end
