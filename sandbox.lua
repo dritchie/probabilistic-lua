@@ -13,7 +13,7 @@ local lag = 1
 local verbose = true
 
 local annealIntervals = 500
-local annealStepsPerInterval = 10
+local annealStepsPerInterval = 1
 local temperedTransitionsFreq = 1.0
 
 -----------------------------------------------------------------
@@ -40,7 +40,7 @@ local temperedTransitionsFreq = 1.0
 -- print("GLOBALLY TEMPERED INFERENCE")
 -- local samps_globally_tempered = util.map(function(s) return s.returnValue end,
 -- 	TemperedTraceMH(program, {scheduleGenerator=globalSched, temperedTransitionsFreq=temperedTransitionsFreq,
--- 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
+-- 	 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag, verbose=verbose}))
 -- local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
 -- print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
 
@@ -50,7 +50,7 @@ local temperedTransitionsFreq = 1.0
 -- print("LOCALLY TEMPERED INFERENCE")
 -- local samps_locally_tempered = util.map(function(s) return s.returnValue end,
 -- 	TemperedTraceMH(program, {scheduleGenerator=localSched, temperedTransitionsFreq=temperedTransitionsFreq,
--- 	 annealIntervals=annealIntervals, numsamps=numsamps, lag=lag, verbose=verbose}))
+-- 	 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag, verbose=verbose}))
 -- local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
 -- print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))
 
@@ -130,6 +130,7 @@ local temperedTransitionsFreq = 1.0
 -- acf_normal_file:close()
 -- acf_global_file:close()
 -- acf_local_file:close()
+
 
 
 -- Autocorrelation over multiple runs experiment with Bayes Chain

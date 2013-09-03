@@ -44,7 +44,7 @@ end
 --   annealing schedule that goes 1-to-N should be able to do better than
 --   a global schedule.
 local numVariables = 10
-local couplingStrength = 0.45
+local couplingStrength = 0.4
 local function buildVarTables()
 	local tables = {}
 
@@ -80,7 +80,11 @@ local function bayesChain(temps)
 	table.insert(vals, temperedMultinomialDraw(domain, varTables[1], temps[1]))
 	for i=2,numVariables do
 		local parent = vals[i-1]
-		local cpd = varTables[i][parent]
+		local table2d = varTables[i]
+		local cpd = table2d[parent]
+		if not cpd then
+			print(string.format("parent for missing table: %d", parent))
+		end
 		table.insert(vals, temperedMultinomialDraw(domain, cpd, temps[i]))
 	end
 	return Vector:new(vals)
