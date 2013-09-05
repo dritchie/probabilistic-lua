@@ -12,47 +12,47 @@ local numsamps = 1000
 local lag = 1
 local verbose = true
 
-local annealIntervals = 50
+local annealIntervals = 100
 local annealStepsPerInterval = 20
 local temperedTransitionsFreq = 1.0
 
 -----------------------------------------------------------------
 
--- -- Running basic experiments
+-- Running basic experiments
 
--- -- local program = ising1d.ising1d
--- -- local globalSched = ising1d.scheduleGen_ising1d_global
--- -- local localSched = ising1d.scheduleGen_ising1d_left_to_right
--- local program = bayesChain.bayesChain
--- local globalSched = bayesChain.scheduleGen_global
--- local localSched = bayesChain.scheduleGen_left_to_right
+-- local program = ising1d.ising1d
+-- local globalSched = ising1d.scheduleGen_ising1d_global
+-- local localSched = ising1d.scheduleGen_ising1d_left_to_right
+local program = bayesChain.bayesChain
+local globalSched = bayesChain.scheduleGen_global
+local localSched = bayesChain.scheduleGen_left_to_right
 
--- -- Normal inference
--- print("NORMAL INFERENCE")
--- local samps_normal = util.map(function(s) return s.returnValue end,
--- 	traceMH(program, {numsamps=numsamps, lag=lag, verbose=verbose}))
--- local aca_normal = autoCorrelationArea(samps_normal)
--- print(string.format("Autocorrelation area of samples: %g", aca_normal))
+-- Normal inference
+print("NORMAL INFERENCE")
+local samps_normal = util.map(function(s) return s.returnValue end,
+	traceMH(program, {numsamps=numsamps, lag=lag, verbose=verbose}))
+local aca_normal = autoCorrelationArea(samps_normal)
+print(string.format("Autocorrelation area of samples: %g", aca_normal))
 
--- print("------------------")
+print("------------------")
 
--- -- Globally tempered inference
--- print("GLOBALLY TEMPERED INFERENCE")
--- local samps_globally_tempered = util.map(function(s) return s.returnValue end,
--- 	TemperedTraceMH(program, {scheduleGenerator=globalSched, temperedTransitionsFreq=temperedTransitionsFreq,
--- 	 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag, verbose=verbose}))
--- local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
--- print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
+-- Globally tempered inference
+print("GLOBALLY TEMPERED INFERENCE")
+local samps_globally_tempered = util.map(function(s) return s.returnValue end,
+	TemperedTraceMH(program, {scheduleGenerator=globalSched, temperedTransitionsFreq=temperedTransitionsFreq,
+	 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag, verbose=verbose}))
+local aca_globally_tempered = autoCorrelationArea(samps_globally_tempered)
+print(string.format("Autocorrelation area of samples: %g", aca_globally_tempered))
 
--- print("------------------")
+print("------------------")
 
--- -- Locally tempered inference
--- print("LOCALLY TEMPERED INFERENCE")
--- local samps_locally_tempered = util.map(function(s) return s.returnValue end,
--- 	TemperedTraceMH(program, {scheduleGenerator=localSched, temperedTransitionsFreq=temperedTransitionsFreq,
--- 	 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag, verbose=verbose}))
--- local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
--- print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))
+-- Locally tempered inference
+print("LOCALLY TEMPERED INFERENCE")
+local samps_locally_tempered = util.map(function(s) return s.returnValue end,
+	TemperedTraceMH(program, {scheduleGenerator=localSched, temperedTransitionsFreq=temperedTransitionsFreq,
+	 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag, verbose=verbose}))
+local aca_locally_tempered = autoCorrelationArea(samps_locally_tempered)
+print(string.format("Autocorrelation area of samples: %g", aca_locally_tempered))
 
 
 -----------------------------------------------------------------
@@ -133,41 +133,41 @@ local temperedTransitionsFreq = 1.0
 
 
 
--- Autocorrelation over multiple runs experiment with Bayes Chain
-local program = bayesChain.bayesChain
-local runs = 10
-local acf_normal = {}
-local acf_global = {}
-local acf_local = {}
+-- -- Autocorrelation over multiple runs experiment with Bayes Chain
+-- local program = bayesChain.bayesChain
+-- local runs = 10
+-- local acf_normal = {}
+-- local acf_global = {}
+-- local acf_local = {}
 
-for i=1,runs do
-	print(i)
-	local samps_normal = util.map(function(s) return s.returnValue end,
-		traceMH(program, {numsamps=numsamps, lag=lag}))
-	acf_normal[i] = autocorrelation(samps_normal)
+-- for i=1,runs do
+-- 	print(i)
+-- 	local samps_normal = util.map(function(s) return s.returnValue end,
+-- 		traceMH(program, {numsamps=numsamps, lag=lag}))
+-- 	acf_normal[i] = autocorrelation(samps_normal)
 
-	local samps_globally_tempered = util.map(function(s) return s.returnValue end,
-		TemperedTraceMH(program, {scheduleGenerator=bayesChain.scheduleGen_global, temperedTransitionsFreq=temperedTransitionsFreq,
-		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
-	acf_global[i] = autocorrelation(samps_globally_tempered)
+-- 	local samps_globally_tempered = util.map(function(s) return s.returnValue end,
+-- 		TemperedTraceMH(program, {scheduleGenerator=bayesChain.scheduleGen_global, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
+-- 	acf_global[i] = autocorrelation(samps_globally_tempered)
 
-	local samps_locally_tempered = util.map(function(s) return s.returnValue end,
-		TemperedTraceMH(program, {scheduleGenerator=bayesChain.scheduleGen_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
-		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
-	acf_local[i] = autocorrelation(samps_locally_tempered)
-end
+-- 	local samps_locally_tempered = util.map(function(s) return s.returnValue end,
+-- 		TemperedTraceMH(program, {scheduleGenerator=bayesChain.scheduleGen_left_to_right, temperedTransitionsFreq=temperedTransitionsFreq,
+-- 		 annealIntervals=annealIntervals, annealStepsPerInterval=annealStepsPerInterval, numsamps=numsamps, lag=lag}))
+-- 	acf_local[i] = autocorrelation(samps_locally_tempered)
+-- end
 
-local acf_normal_file = io.open("acf_normal.csv", "w")
-local acf_global_file = io.open("acf_global.csv", "w")
-local acf_local_file = io.open("acf_local.csv", "w")
-for i=1,numsamps do
-	acf_normal_file:write(table.concat(util.map(function(s) return s[i] end, acf_normal), ",") .. "\n")
-	acf_global_file:write(table.concat(util.map(function(s) return s[i] end, acf_global), ",") .. "\n")
-	acf_local_file:write(table.concat(util.map(function(s) return s[i] end, acf_local), ",") .. "\n")
-end
-acf_normal_file:close()
-acf_global_file:close()
-acf_local_file:close()
+-- local acf_normal_file = io.open("acf_normal.csv", "w")
+-- local acf_global_file = io.open("acf_global.csv", "w")
+-- local acf_local_file = io.open("acf_local.csv", "w")
+-- for i=1,numsamps do
+-- 	acf_normal_file:write(table.concat(util.map(function(s) return s[i] end, acf_normal), ",") .. "\n")
+-- 	acf_global_file:write(table.concat(util.map(function(s) return s[i] end, acf_global), ",") .. "\n")
+-- 	acf_local_file:write(table.concat(util.map(function(s) return s[i] end, acf_local), ",") .. "\n")
+-- end
+-- acf_normal_file:close()
+-- acf_global_file:close()
+-- acf_local_file:close()
 
 -----------------------------------------------------------------
 

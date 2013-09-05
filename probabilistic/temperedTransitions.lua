@@ -72,21 +72,21 @@ function TemperedTransitionsKernel:next(currState, hyperparams)
 	self.currentComputation = nextTrace.computation
 	nextTrace.computation = self.thunkedComputation
 
-	local annealingLpRatio = 0
+	local annealingLpRatio = -currState.logprob
 	local prevNumAnnealPropsMade = self.innerKernel.proposalsMade
 	local prevNumAnnealPropsAccepted = self.innerKernel.proposalsAccepted
-	for aInterval=0,self.annealIntervals-1 do
-		local denomlp = nextTrace.logprob
-		self.currentTemps = self.scheduleGenerator(aInterval, self.annealIntervals-1)
+	for aInterval=1,self.annealIntervals do
+		-- Set the temp such that the first and last iterations of this loop will
+		-- be one notch away from the ends of the range
+		self.currentTemps = self.scheduleGenerator(aInterval, self.annealIntervals+1)
 		nextTrace:traceUpdate(true)
 		local numerlp = nextTrace.logprob
-		annealingLpRatio = annealingLpRatio + (numerlp - denomlp)
-
-		-- table.insert(self.energyJumpLog[aInterval], (numerlp - denomlp))
-
 		for aStep=1,self.annealStepsPerInterval do
 			nextTrace = self.innerKernel:next(nextTrace)
 		end
+		local denomlp = nextTrace.logprob
+		annealingLpRatio = annealingLpRatio + (numerlp - denomlp)
+		-- table.insert(self.energyJumpLog[aInterval], (numerlp - denomlp))
 	end
 	self.annealingProposalsMade = self.annealingProposalsMade +
 								  self.annealIntervals*self.annealStepsPerInterval
@@ -98,6 +98,8 @@ function TemperedTransitionsKernel:next(currState, hyperparams)
 	nextTrace.computation = self.currentComputation
 	nextTrace = self.innerKernel:releaseControl(nextTrace)
 	nextTrace = self:assumeControl(nextTrace)
+	nextTrace:traceUpdate(true)
+	annealingLpRatio = annealingLpRatio + nextTrace.logprob
 
 	-- print("--- FINAL STATE ---")
 	-- for i,v in ipairs(nextTrace.returnValue) do print(v) end
