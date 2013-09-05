@@ -3,13 +3,37 @@ local util = require("probabilistic.util")
 util.openpackage(pr)
 
 local random = require("probabilistic.random")
-local Vector = require("models.vector")
+--local Vector = require("models.vector")
+
+
+-- 'Categorical' vector class that defines a more appropriate
+-- inner product operator for categorical data
+local CatVector = {}
+
+function CatVector:new(tbl)
+	setmetatable(tbl, self)
+	self.__index = self
+	return tbl
+end
+
+function CatVector:__mul(cv)
+	assert(#self == #cv)
+	local numsame = 0
+	for i=1,#self do
+		if self[i] == cv[i] then
+			numsame = numsame + 1
+		else
+			numsame = numsame - 1
+		end
+	end
+	return numsame
+end
+
 
 -- A multinomial prior whose logprobs can be tempered
 -- The temperature is stored as the first parameter
 local temperedMultinomial =
 makeERP(function(temp, ...)	-- Sampling fn
-			--print(select("#", ...))
 			return random.multinomial_sample(...)
 		end,
 		function(val, temp, ...) -- Logprob fn
@@ -28,7 +52,10 @@ makeERP(function(temp, ...)	-- Sampling fn
 local function temperedMultinomialDraw(items, probs, temp)
 	local p = util.copytable(probs)
 	table.insert(p, 1, temp)
-	return items[temperedMultinomial(p)]
+	local index = temperedMultinomial(p, {recomputeLP=true})
+	if index < 1 then index = 1 end
+	if index > #items then index = #items end
+	return items[index]
 end
 
 
@@ -44,7 +71,7 @@ end
 --   annealing schedule that goes 1-to-N should be able to do better than
 --   a global schedule.
 local numVariables = 10
-local couplingStrength = 0.4
+local couplingStrength = 0.49
 local function buildVarTables()
 	local tables = {}
 
@@ -80,14 +107,21 @@ local function bayesChain(temps)
 	table.insert(vals, temperedMultinomialDraw(domain, varTables[1], temps[1]))
 	for i=2,numVariables do
 		local parent = vals[i-1]
+		if not parent then
+			error(string.format("parent is nil for variable %d", i))
+		end
 		local table2d = varTables[i]
 		local cpd = table2d[parent]
-		if not cpd then
-			print(string.format("parent for missing table: %d", parent))
+		local v = temperedMultinomialDraw(domain, cpd, temps[i])
+		if not v then
+			print(string.format("Drew a nil value for variable %d", i))
+			print("cpd is ", cpd)
+			error("")
 		end
-		table.insert(vals, temperedMultinomialDraw(domain, cpd, temps[i]))
+		table.insert(vals, v)
 	end
-	return Vector:new(vals)
+	return CatVector:new(vals)
+	--return Vector:new(vals)
 end
 
 local function scheduleGen_global(annealStep, maxAnnealStep)

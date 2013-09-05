@@ -12,8 +12,8 @@ local numsamps = 1000
 local lag = 1
 local verbose = true
 
-local annealIntervals = 500
-local annealStepsPerInterval = 1
+local annealIntervals = 50
+local annealStepsPerInterval = 20
 local temperedTransitionsFreq = 1.0
 
 -----------------------------------------------------------------
@@ -135,7 +135,7 @@ local temperedTransitionsFreq = 1.0
 
 -- Autocorrelation over multiple runs experiment with Bayes Chain
 local program = bayesChain.bayesChain
-local runs = 20
+local runs = 10
 local acf_normal = {}
 local acf_global = {}
 local acf_local = {}

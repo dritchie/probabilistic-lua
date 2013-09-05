@@ -104,11 +104,11 @@ function TemperedTransitionsKernel:next(currState, hyperparams)
 	-- print(string.format("Acceptance Prob: %g", annealingLpRatio))
 
 	if nextTrace.conditionsSatisfied and math.log(math.random()) < annealingLpRatio then
-		--print("ACCEPTED")
+		-- print("ACCEPTED")
 		self.proposalsAccepted = self.proposalsAccepted + 1
 		return nextTrace
 	else
-		--print("REJECTED")
+		-- print("REJECTED")
 		return currState
 	end
 end

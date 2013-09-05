@@ -11,10 +11,11 @@ local RandomPrimitive =
 		-- We pass '0' ass the 4th arg because alls to this function, as well
 		-- as 'lookupVariableValue,' are tail calls
 		return trace.lookupVariableValue(self, paramTable,
-			modifierTable and modifierTable.isStructural or nil,
+			modifierTable and modifierTable.isStructural or false,
 			0,
 			modifierTable and modifierTable.conditionedValue or nil,
-			modifierTable and modifierTable.annotation or nil)
+			modifierTable and modifierTable.annotation or nil,
+			modifierTable and modifierTable.recomputeLP or false)
 	end
 }
 

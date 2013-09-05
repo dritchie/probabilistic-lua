@@ -234,7 +234,7 @@ end
 
 -- Looks up the value of a random variable.
 -- Creates the variable if it does not already exist
-function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, conditionedValue, annotation)
+function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, conditionedValue, annotation, recomputeLP)
 	local record = nil
 	local name = nil
 	-- Try to find the variable (first check the flat list, then do slower name lookup)
@@ -265,7 +265,7 @@ function RandomExecutionTrace:lookup(erp, params, numFrameSkip, isStructural, co
 			mt.traceNonstructuralVariable(record)
 		-- Otherwise, proceed normally
 		else
-			local hasChanges = false
+			local hasChanges = recomputeLP
 			-- If params have changed, we need to recompute log prob
 			if not util.arrayequals(record.params, params) then
 				record.params = params
@@ -321,12 +321,12 @@ end
 
 -- Exported functions for interacting with the singleton trace
 
-local function lookupVariableValue(erp, params, isStructural, numFrameSkip, conditionedValue, annotation)
+local function lookupVariableValue(erp, params, isStructural, numFrameSkip, conditionedValue, annotation, recomputeLP)
 	if not trace then
 		return conditionedValue or erp:sample(params)
 	else
 		-- We don't do numFrameSkip + 1 because this is a tail call
-		return trace:lookup(erp, params, numFrameSkip, isStructural, conditionedValue, annotation)
+		return trace:lookup(erp, params, numFrameSkip, isStructural, conditionedValue, annotation, recomputeLP)
 	end
 end
 
