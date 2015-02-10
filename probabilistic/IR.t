@@ -1,5 +1,5 @@
 local util = require("probabilistic.util")
-local cmath = terralib.require("probabilistic.cmath")
+local cmath = require("probabilistic.cmath")
 
 
 local IR = {}

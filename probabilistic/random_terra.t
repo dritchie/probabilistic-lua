@@ -1,5 +1,5 @@
 
-local cmath = terralib.require("probabilistic.cmath")
+local cmath = require("probabilistic.cmath")
 
 -- Information about templated Terra functions goes in this array.
 -- Entries have the following form:

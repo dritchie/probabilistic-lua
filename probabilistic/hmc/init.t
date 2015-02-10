@@ -1,4 +1,4 @@
-local util = terralib.require("probabilistic.util")
+local util = require("probabilistic.util")
 local ffi = require("ffi")
 
 local unaryOps = 

@@ -1,6 +1,6 @@
 local util = require("probabilistic.util")
-local hmc = terralib.require("probabilistic.hmc")
-local IR = terralib.require("probabilistic.IR")
+local hmc = require("probabilistic.hmc")
+local IR = require("probabilistic.IR")
 
 
 local function interfacePreamble(ishmc)

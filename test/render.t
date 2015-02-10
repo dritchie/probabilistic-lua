@@ -1,9 +1,9 @@
 
 local pr = require("probabilistic")
 local util = require("probabilistic.util")
-local fi = terralib.require("test.freeimage")
-local hmc = terralib.require("probabilistic.hmc")
-local render = terralib.require("renderer")
+local fi = require("test.freeimage")
+local hmc = require("probabilistic.hmc")
+local render = require("renderer")
 local random = require("probabilistic.random")
 util.openpackage(pr)
 

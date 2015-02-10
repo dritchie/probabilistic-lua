@@ -1,10 +1,10 @@
 local util = require("probabilistic.util")
-local mt = terralib.require("probabilistic.mathtracing")
-local cmath = terralib.require("probabilistic.cmath")
+local mt = require("probabilistic.mathtracing")
+local cmath = require("probabilistic.cmath")
 local trace = require("probabilistic.trace")
 local inf = require("probabilistic.inference")
 local prof = require("probabilistic.profiling")
-local hmc = terralib.require("probabilistic.hmc")
+local hmc = require("probabilistic.hmc")
 local ffi = require("ffi")
 
 

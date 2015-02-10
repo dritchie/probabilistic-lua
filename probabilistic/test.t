@@ -1,5 +1,5 @@
 
-local mt = terralib.require("probabilistic.mathtracing")
+local mt = require("probabilistic.mathtracing")
 
 local function traceCompileRun(fn, args)
 	mt.setRealNumberType(double)

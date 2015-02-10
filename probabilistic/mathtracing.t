@@ -1,6 +1,6 @@
 local util = require("probabilistic.util")
-local IR = terralib.require("probabilistic.IR")
-local cc = terralib.require("probabilistic.cCompiler")
+local IR = require("probabilistic.IR")
+local cc = require("probabilistic.cCompiler")
 local prof = require("probabilistic.profiling")
 
 

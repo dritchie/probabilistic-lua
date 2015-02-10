@@ -163,7 +163,7 @@
 
 ---------------------------------
 
--- hmc = terralib.require("probabilistic.hmc")
+-- hmc = require("probabilistic.hmc")
 -- hmc.toggleLuaAD(true)
 -- n1 = hmc.makeNum(42)
 -- n2 = hmc.makeNum(1)
@@ -173,7 +173,7 @@
 --------------------------
 
 -- random = require("probabilistic.random")
--- hmc = terralib.require("probabilistic.hmc")
+-- hmc = require("probabilistic.hmc")
 -- mean = 0.1
 -- sd = 0.5
 -- print(random.gaussian_logprob(0.2, mean, sd))
